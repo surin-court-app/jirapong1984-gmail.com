@@ -186,8 +186,7 @@ app.post('/api/audit-logs', async (req, res) => {
 // Serve static files จาก Vite dist folder (กรณี Deploy ขึ้น Render)
 app.use(express.static(path.join(__dirname, '../dist')));
 
-// ส่ง index.html สำหรับทุก URL ที่ไม่ใช่ API
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
