@@ -174,16 +174,6 @@ const handleImageChange = (e) => {
     });
   };
 
-
-
-    const newPhotoUrls = validFiles.map(file => URL.createObjectURL(file));
-    setFormData(prev => ({
-      ...prev,
-      photos: [...prev.photos, ...newPhotoUrls]
-    }));
-    addAuditLog('UPLOAD_PHOTO', `อัปโหลดรูปภาพจำนวน ${validFiles.length} รูป`);
-  };
-
   const handleRemovePhoto = (indexToRemove) => {
     setFormData(prev => ({
       ...prev,
