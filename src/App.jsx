@@ -150,8 +150,7 @@ export default function SurinCourtWarrantApp() {
     const parts = dateString.split('-');
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
-
-  const handleImageChange = (e) => {
+const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -163,7 +162,19 @@ export default function SurinCourtWarrantApp() {
       return true;
     });
 
-    if (validFiles.length === 0) return;
+    validFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData((prev) => ({
+          ...prev,
+          photos: [...prev.photos, reader.result]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+
 
     const newPhotoUrls = validFiles.map(file => URL.createObjectURL(file));
     setFormData(prev => ({
