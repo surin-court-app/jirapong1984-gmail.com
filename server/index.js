@@ -10,8 +10,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // เชื่อมต่อฐานข้อมูล Turso Cloud Database
 const db = createClient({
-  url: process.env.TURSO_DATABASE_URL || "libsql://surin-court-db-tomsound.aws-ap-northeast-1.turso.io",
-  authToken: process.env.TURSO_AUTH_TOKEN || "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODc4MjMwNzgsImlkIjoiMDFhMDQyOGQtODUwMS03MWEwLWE0N2ItZDViY2E4NzVhYWUxIiwia2lkIjoibVg3S2F0Sk1JYTZDRXBFcE1QYVk5YmN1aVFjTFFKQU91cmRCQkE3eEN6YyIsInJpZCI6IjQ3MjRjMDhlLTdiOTMtNDg5MS1iODAwLWYxNGEyNmUwNmFiMiJ9.fwARVakWZXmb5bIhvE2vnS7L1MyGGArounUUHYy30RL7Iy2Sv7VBRP1N96jih4Dbfgc2ZZcIxdtEymGIT6LIAw"
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN
 });
 
 (async () => {
