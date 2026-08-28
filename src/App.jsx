@@ -1343,6 +1343,7 @@ export default function SurinCourtWarrantApp() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
+                            {/* ปุ่มเรียกดู/แก้ไข */}
                             <button
                               type="button"
                               onClick={() => {
@@ -1352,6 +1353,16 @@ export default function SurinCourtWarrantApp() {
                               className="bg-amber-800 hover:bg-amber-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow transition cursor-pointer"
                             >
                               เรียกดู/แก้ไข <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* ปุ่มลบรายการ */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteWarrantRecord(rec.id, rec.blackNo, rec.targetName)}
+                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow transition cursor-pointer"
+                              title="ลบรายการนี้ออกจากระบบ"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> ลบ
                             </button>
                           </div>
                         </div>
