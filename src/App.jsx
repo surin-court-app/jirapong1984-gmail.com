@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch } from 'lucide-react';
+import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder } from 'lucide-react';
 
 // ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
@@ -44,6 +44,12 @@ export default function SurinCourtWarrantApp() {
   const [editingUserId, setEditingUserId] = useState(null);
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
+
+  // State สำหรับคลังโฟลเดอร์ย้อนหลัง
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -150,7 +156,8 @@ export default function SurinCourtWarrantApp() {
     const parts = dateString.split('-');
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
-const handleImageChange = (e) => {
+
+  const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -429,6 +436,36 @@ const handleImageChange = (e) => {
     }
   };
 
+  // คำนวณการจัดกลุ่มคลังข้อมูลโฟลเดอร์ (ปี พ.ศ. -> เดือน -> วันที่)
+  const getGroupedArchive = () => {
+    const archive = {};
+    const monthNames = [
+      "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+      "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+
+    currentRecords.forEach(rec => {
+      if (!rec.isSaved) return; // เลือกเฉพาะรายการที่บันทึกรายงานแล้ว
+      const dateStr = rec.sendDate || todayStr;
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const yearBE = (parseInt(parts[0], 10) + 543).toString();
+        const monthName = monthNames[parseInt(parts[1], 10) - 1] || parts[1];
+        const day = parseInt(parts[2], 10).toString();
+
+        if (!archive[yearBE]) archive[yearBE] = {};
+        if (!archive[yearBE][monthName]) archive[yearBE][monthName] = {};
+        if (!archive[yearBE][monthName][day]) archive[yearBE][monthName][day] = [];
+
+        archive[yearBE][monthName][day].push(rec);
+      }
+    });
+
+    return archive;
+  };
+
+  const archivedData = getGroupedArchive();
+
   // รอดำเนินการ = ยังไม่ได้บันทึกรายงาน
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
   
@@ -442,7 +479,6 @@ const handleImageChange = (e) => {
   
   if (searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase().trim();
-    // ถ้าพิมพ์ค้นหา ให้ค้นหาจากข้อมูลทั้งหมดในระบบ
     displayedRecords = currentRecords.filter(r => 
       (r.blackNo && r.blackNo.toLowerCase().includes(q)) ||
       (r.redNo && r.redNo.toLowerCase().includes(q)) ||
@@ -654,6 +690,20 @@ const handleImageChange = (e) => {
                     title="ดูประวัติหมายที่เคยบันทึกไว้ทั้งหมด"
                   >
                     <History className="w-4 h-4" /> ประวัติ/ค้นหารายงานย้อนหลัง
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowArchiveModal(true);
+                      setSelectedYear(null);
+                      setSelectedMonth(null);
+                      setSelectedDate(null);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                    title="เปิดดูข้อมูลย้อนหลังแบบแยกโฟลเดอร์ วัน/เดือน/ปี"
+                  >
+                    <Folder className="w-4 h-4" /> คลังโฟลเดอร์ย้อนหลัง
                   </button>
 
                   <button
@@ -999,6 +1049,189 @@ const handleImageChange = (e) => {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Modal คลังโฟลเดอร์ย้อนหลัง (แยกตามวัน/เดือน/ปี) */}
+        {showArchiveModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 no-print">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] border border-amber-300">
+              
+              {/* Header */}
+              <div className="bg-slate-900 text-white p-4 flex justify-between items-center border-b-2 border-amber-500">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-yellow-400">
+                  <Folder className="w-5 h-5 text-yellow-400" /> คลังจัดเก็บข้อมูลย้อนหลัง (แยกตามวัน/เดือน/ปี)
+                </h3>
+                <button 
+                  onClick={() => setShowArchiveModal(false)}
+                  className="text-gray-400 hover:text-white text-xl font-bold px-2"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Breadcrumb Navigation */}
+              <div className="bg-slate-100 px-6 py-3 border-b text-sm flex items-center gap-2 font-medium text-slate-700">
+                <span 
+                  className="cursor-pointer hover:underline text-blue-600 font-bold flex items-center gap-1"
+                  onClick={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedDate(null); }}
+                >
+                  <Folder className="w-4 h-4 text-amber-600" /> คลังหลัก (ปี พ.ศ.)
+                </span>
+                {selectedYear && (
+                  <>
+                    <span>/</span>
+                    <span 
+                      className="cursor-pointer hover:underline text-blue-600 font-bold"
+                      onClick={() => { setSelectedMonth(null); setSelectedDate(null); }}
+                    >
+                      พ.ศ. {selectedYear}
+                    </span>
+                  </>
+                )}
+                {selectedMonth && (
+                  <>
+                    <span>/</span>
+                    <span 
+                      className="cursor-pointer hover:underline text-blue-600 font-bold"
+                      onClick={() => setSelectedDate(null)}
+                    >
+                      {selectedMonth}
+                    </span>
+                  </>
+                )}
+                {selectedDate && (
+                  <>
+                    <span>/</span>
+                    <span className="text-amber-700 font-bold">วันที่ {selectedDate}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Content Area */}
+              <div className="p-6 overflow-y-auto flex-1">
+                {/* Level 1: เลือกปี */}
+                {!selectedYear && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">เลือกปี พ.ศ. ที่ต้องการเข้าดูข้อมูล:</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {Object.keys(archivedData).length === 0 ? (
+                        <p className="text-gray-400 col-span-full text-center py-12 italic">ยังไม่มีข้อมูลรายงานผลที่บันทึกในระบบ</p>
+                      ) : (
+                        Object.keys(archivedData).map((year) => (
+                          <button
+                            key={year}
+                            onClick={() => setSelectedYear(year)}
+                            className="flex flex-col items-center justify-center p-6 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl transition shadow-sm group cursor-pointer"
+                          >
+                            <Folder className="w-12 h-12 text-amber-600 group-hover:scale-110 transition mb-2" />
+                            <span className="font-bold text-amber-950 text-base">ปี พ.ศ. {year}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Level 2: เลือกเดือน */}
+                {selectedYear && !selectedMonth && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">เลือกเดือน (ปี พ.ศ. {selectedYear}):</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {Object.keys(archivedData[selectedYear] || {}).map((month) => (
+                        <button
+                          key={month}
+                          onClick={() => setSelectedMonth(month)}
+                          className="flex items-center gap-4 p-4 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-xl transition shadow-sm group cursor-pointer"
+                        >
+                          <Folder className="w-10 h-10 text-blue-600 group-hover:scale-110 transition" />
+                          <div className="text-left">
+                            <p className="font-bold text-blue-950 text-sm">{month}</p>
+                            <p className="text-xs text-blue-700">
+                              {Object.keys(archivedData[selectedYear][month]).length} วันที่มีบันทึก
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Level 3: เลือกวัน */}
+                {selectedYear && selectedMonth && !selectedDate && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+                      เลือกวันที่ ({selectedMonth} {selectedYear}):
+                    </h4>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                      {Object.keys(archivedData[selectedYear][selectedMonth] || {}).map((day) => (
+                        <button
+                          key={day}
+                          onClick={() => setSelectedDate(day)}
+                          className="flex flex-col items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition shadow-sm group cursor-pointer"
+                        >
+                          <Folder className="w-8 h-8 text-emerald-600 group-hover:scale-110 transition mb-1" />
+                          <span className="font-bold text-emerald-950 text-sm">วันที่ {day}</span>
+                          <span className="text-[10px] text-emerald-700 font-bold mt-0.5">
+                            {archivedData[selectedYear][selectedMonth][day].length} รายการ
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Level 4: รายการข้อมูลในวันที่เลือก */}
+                {selectedYear && selectedMonth && selectedDate && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                      รายการหมายศาลวันที่ {selectedDate} {selectedMonth} {selectedYear}:
+                    </h4>
+                    <div className="space-y-3">
+                      {archivedData[selectedYear][selectedMonth][selectedDate].map((rec, index) => (
+                        <div key={rec.id || index} className="p-4 border border-gray-200 rounded-xl bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm hover:border-amber-400 transition">
+                          <div className="space-y-1">
+                            <div className="font-bold text-slate-800 text-sm">
+                              คดีดำ: <span className="text-amber-800 font-mono">{rec.blackNo || '-'}</span> | คดีแดง: <span className="text-amber-800 font-mono">{rec.redNo || '-'}</span>
+                            </div>
+                            <div className="text-xs text-slate-700">
+                              หมายถึง: <strong className="text-slate-900">{rec.targetName || '-'}</strong> | ประเภท: {rec.warrantType || '-'}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              ที่อยู่: {rec.address} {rec.subdistrict} {rec.district} {rec.province}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectExcelData(rec);
+                                setShowArchiveModal(false);
+                              }}
+                              className="bg-amber-800 hover:bg-amber-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow transition cursor-pointer"
+                            >
+                              เรียกดู/แก้ไข <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 p-4 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
+                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Turso Cloud ถาวร</span>
+                <button
+                  onClick={() => setShowArchiveModal(false)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg transition font-bold"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
+
+            </div>
           </div>
         )}
 
