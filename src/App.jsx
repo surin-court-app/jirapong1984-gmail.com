@@ -169,28 +169,86 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  const handleImageChange = (e) => {
+  // ฟังก์ชันวาดตัวอักษรข้อมูล GPS / วันเวลา ลงไปบนตัวภาพถ่ายโดยตรง
+  const processImageWithWatermark = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+
+          // วาดภาพต้นฉบับ
+          ctx.drawImage(img, 0, 0);
+
+          // คำนวณขนาดตัวอักษรตามสัดส่วนภาพ
+          const fontSize = Math.max(20, Math.floor(canvas.width / 32));
+          ctx.font = `bold ${fontSize}px 'TH Sarabun New', sans-serif`;
+
+          // ข้อมูลที่จะสกรีนลงบนภาพ
+          const lines = [
+            `GPS: ${formData.gps || 'ไม่ได้ระบุพิกัด'}`,
+            `${formData.village ? formData.village + ' ' : ''}ตำบล ${formData.subdistrict || '-'} อำเภอ ${formData.district || '-'}`,
+            `จังหวัด ${formData.province || 'สุรินทร์'} ${formData.zipcode || ''}`,
+            `วันที่ ${formatThaiDate(formData.sendDate)} เวลา ${formData.sendTime || getCurrentTimeStr()} น.`
+          ];
+
+          const padding = fontSize * 0.5;
+          const lineHeight = fontSize * 1.3;
+          const boxWidth = Math.max(...lines.map(line => ctx.measureText(line).width)) + (padding * 2);
+          const boxHeight = (lines.length * lineHeight) + (padding * 1.5);
+
+          const x = canvas.width - boxWidth - (fontSize * 0.8);
+          const y = canvas.height - boxHeight - (fontSize * 0.8);
+
+          // วาดพื้นหลังสีดำโปร่งแสงรองรับข้อความ
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(x, y, boxWidth, boxHeight, 10) : ctx.rect(x, y, boxWidth, boxHeight);
+          ctx.fill();
+
+          // วาดตัวหนังสือสีขาวคมชัด
+          ctx.fillStyle = '#FFFFFF';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+
+          lines.forEach((line, index) => {
+            ctx.fillText(line, x + padding, y + padding + (index * lineHeight));
+          });
+
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
     const validFiles = files.filter(file => {
-      if (file.size > 5 * 1024 * 1024) {
-        alert(`ไฟล์ ${file.name} มีขนาดเกิน 5MB`);
+      if (file.size > 8 * 1024 * 1024) {
+        alert(`ไฟล์ ${file.name} มีขนาดเกิน 8MB`);
         return false;
       }
       return true;
     });
 
-    validFiles.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({
-          ...prev,
-          photos: [...prev.photos, reader.result]
-        }));
-      };
-      reader.readAsDataURL(file);
-    });
+    const processedImages = [];
+    for (const file of validFiles) {
+      const watermarkedImgData = await processImageWithWatermark(file);
+      processedImages.push(watermarkedImgData);
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      photos: [...prev.photos, ...processedImages]
+    }));
   };
 
   const handleRemovePhoto = (indexToRemove) => {
@@ -356,9 +414,9 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // แผนที่ดาวเทียม Yandex Satellite พร้อมระบบแปลงพิกัดป้องกันภาพเสีย
+  // ดึงแผนที่ดาวเทียมความละเอียดสูงจาก ESRI Tile API เสถียร 100%
   const getMapImageUrl = (gpsVal) => {
-    let lat = "14.872185", lng = "103.461160";
+    let lat = 14.872185, lng = 103.461160;
     if (gpsVal && typeof gpsVal === 'string') {
       const cleanGps = gpsVal.replace(/[^\d.,-]/g, '').trim();
       const parts = cleanGps.split(',');
@@ -366,15 +424,18 @@ export default function SurinCourtWarrantApp() {
         const parsedLat = parseFloat(parts[0]);
         const parsedLng = parseFloat(parts[1]);
         if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-          lat = parsedLat.toFixed(6);
-          lng = parsedLng.toFixed(6);
+          lat = parsedLat;
+          lng = parsedLng;
         }
       }
     }
-    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=16&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
+    const zoom = 16;
+    const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
+    const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY}/${tileX}`;
   };
 
-  // ฟังก์ชันดาวน์โหลดรายงานเป็นไฟล์ Microsoft Word (.doc)
+  // ฟังก์ชันดาวน์โหลดเอกสาร Microsoft Word (.doc)
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) {
       alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
@@ -1109,14 +1170,16 @@ export default function SurinCourtWarrantApp() {
                   <div className="p-5 bg-gray-50 border border-gray-200 rounded-xl flex flex-col justify-between shadow-sm">
                     <div className="text-center mb-3">
                       <span className="font-bold text-base text-gray-800 block">ภาพถ่ายสถานที่ส่ง</span>
-                      <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 5MB)</span>
+                      <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
                     </div>
 
+                    {/* ปุ่มถ่ายภาพ/เลือกภาพที่รองรับการถ่ายจากกล้องโทรศัพท์โดยตรง */}
                     <label className="w-full bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
                       <Camera className="w-4 h-4" /> ถ่ายภาพ / เลือกรูปถ่าย
                       <input 
                         type="file" 
                         accept="image/*" 
+                        capture="environment"
                         onChange={handleImageChange} 
                         className="hidden" 
                         multiple 
