@@ -355,7 +355,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ปรับสไตล์แผนที่พรีวิว GPS เป็นสไตล์ Google Maps Light Vector
+  // สร้างแผนที่เวกเตอร์สไตล์คลีนแบบ Google Maps สว่างใสพร้อมปักหมุดแดง
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -370,6 +370,7 @@ export default function SurinCourtWarrantApp() {
         }
       }
     }
+    // สไตล์ OpenStreetMap/Mapnik เวคเตอร์คลีนโทนสว่าง
     return `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
   };
 
@@ -938,7 +939,7 @@ export default function SurinCourtWarrantApp() {
                         type="text"
                         value={formData.zipcode || ''}
                         onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
-                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-mono font-bold text-xs"
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 text-gray-800 font-mono font-bold text-xs"
                         placeholder="32000"
                       />
                     </div>
