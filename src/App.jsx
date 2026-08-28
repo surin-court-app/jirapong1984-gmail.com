@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder } from 'lucide-react';
+import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown } from 'lucide-react';
 
 // ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
@@ -356,7 +356,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // แผนที่สไตล์เวกเตอร์คลีน โทนสว่าง Google Maps เสถียร 100%
+  // แผนที่ดาวเทียม Yandex พร้อมปรับระบบ Fallback ให้แสดงผลรูปแน่นอน
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -371,7 +371,90 @@ export default function SurinCourtWarrantApp() {
         }
       }
     }
-    return `https://maps.geoapify.com/v1/staticmap?style=osm-bright&width=600&height=280&center=lonlat:${lng},${lat}&zoom=16&marker=lonlat:${lng},${lat};color:%23ff0000;size:medium&apiKey=edb8f08146aa42db81223fa80e816a6f`;
+    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=16&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
+  };
+
+  // ฟังก์ชันสร้างเอกสาร Microsoft Word (.doc)
+  const handleDownloadWordDoc = () => {
+    if (!formData.blackNo && !formData.targetName) {
+      alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
+      return;
+    }
+
+    addAuditLog('DOWNLOAD_WORD', `ดาวน์โหลดเอกสาร Word คดีดำ: ${formData.blackNo} ถึง: ${formData.targetName}`);
+
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <title>บันทึกการปิดหมาย</title>
+        <style>
+          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; }
+          .center { text-align: center; }
+          .right { text-align: right; }
+          .bold { font-weight: bold; }
+          .title { font-size: 20pt; font-weight: bold; text-align: center; margin-bottom: 10px; }
+          .underline-dot { border-bottom: 1px dotted #000; padding: 0 5px; font-weight: bold; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          td { vertical-align: top; text-align: center; padding: 5px; }
+          img { max-width: 100%; height: auto; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="title">บันทึกการปิดหมาย / คำบังคับ</div>
+        <div class="right">
+          <div class="bold" style="font-size: 18pt;">[ศาลจังหวัดสุรินทร์]</div>
+          <div>คดีหมายเลขดำที่ <span class="underline-dot">${formData.blackNo || "........................"}</span></div>
+          <div>คดีหมายเลขแดงที่ <span class="underline-dot">${formData.redNo || "........................"}</span></div>
+        </div>
+        <br/>
+        <div>เขียนที่ บ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ${formData.village || ''} ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span></div>
+        <div>วันที่ <span class="underline-dot">${formatThaiDate(formData.sendDate)}</span></div>
+        <br/>
+        <div>วันนี้เวลาประมาณ <span class="underline-dot">${formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span class="underline-dot">${formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span class="underline-dot">${formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ${formData.village || ''} ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
+        <br/>
+        <div>ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span class="underline-dot">${formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+        <br/>
+        <div class="center bold" style="font-size: 18pt;">จึงบันทึกไว้เป็นหลักฐาน</div>
+        <br/>
+        <div class="right">
+          <div class="center" style="display: inline-block; width: 300px;">
+            <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
+            <div class="bold">(${currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
+          </div>
+        </div>
+        <br/>
+        <div class="center bold">ลักษณะบ้าน <span class="underline-dot">${formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
+        <br/>
+        <table>
+          <tr>
+            <td>
+              <div class="bold" style="font-size: 12pt;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
+              ${formData.photos.length > 0 ? `<img src="${formData.photos[0]}" width="350" height="240"/>` : '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>'}
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="bold" style="font-size: 12pt; margin-top: 10px;">พิกัด GPS: ${formData.gps || "14.872185, 103.461160"}</div>
+              <img src="${getMapImageUrl(formData.gps)}" width="350" height="200"/>
+              <div style="font-size: 11pt; font-weight: bold; margin-top: 5px;">
+                GPS: ${formData.gps || "14.872185, 103.461160"} | ${formData.village ? formData.village + ' ' : ''}ต.${formData.subdistrict || ''} อ.${formData.district || ''} จ.${formData.province || 'สุรินทร์'}
+              </div>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `รายงานปิดหมาย_${formData.blackNo || 'คดี'}_${formData.targetName || 'จำเลย'}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleConfirmBatchPrint = () => {
@@ -553,6 +636,7 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
+        /* ปรับข้อความoverlay บนรูป GPS ให้เป็นสีดำเข้มคมชัด */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
@@ -938,7 +1022,7 @@ export default function SurinCourtWarrantApp() {
                         type="text"
                         value={formData.zipcode || ''}
                         onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
-                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 text-gray-800 font-mono font-bold text-xs"
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-mono font-bold text-xs"
                         placeholder="32000"
                       />
                     </div>
@@ -1002,7 +1086,7 @@ export default function SurinCourtWarrantApp() {
 
                     <div className="border border-yellow-300 rounded-lg overflow-hidden bg-white shadow-xs">
                       <div className="bg-yellow-100/80 px-3 py-1 text-[11px] font-bold text-amber-900 flex justify-between items-center">
-                        <span>ภาพพรีวิวแผนที่ถนน GPS:</span>
+                        <span>ภาพพรีวิวแผนที่ดาวเทียม GPS:</span>
                         <span className="font-mono text-[10px]">{formData.gps || "ยังไม่ได้ระบุ"}</span>
                       </div>
                       <img 
@@ -1014,7 +1098,7 @@ export default function SurinCourtWarrantApp() {
                           const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
                           const lat = cleanGps[0] || '14.872185';
                           const lng = cleanGps[1] || '103.461160';
-                          e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
+                          e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${Math.round((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16))}/${Math.round((parseFloat(lng) + 180) / 360 * Math.pow(2, 16))}`;
                         }}
                       />
                     </div>
@@ -1079,6 +1163,15 @@ export default function SurinCourtWarrantApp() {
                   className="flex-1 bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition"
                 >
                   <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={handleDownloadWordDoc}
+                  className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-blue-500"
+                  title="ดาวน์โหลดแบบฟอร์มเพื่อแก้ไขใน Microsoft Word"
+                >
+                  <FileDown className="w-4 h-4" /> ดาวน์โหลดเอกสาร (Word)
                 </button>
 
                 <button 
@@ -1705,13 +1798,6 @@ export default function SurinCourtWarrantApp() {
                       src={getMapImageUrl(formData.gps)} 
                       alt="แผนที่ GPS" 
                       className="w-full h-64 object-cover block mx-auto rounded-lg" 
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                        const lat = cleanGps[0] || '14.872185';
-                        const lng = cleanGps[1] || '103.461160';
-                        e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
-                      }}
                     />
                     
                     <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
@@ -1800,13 +1886,6 @@ export default function SurinCourtWarrantApp() {
                           src={getMapImageUrl(item.gps)} 
                           alt="แผนที่ GPS" 
                           className="w-full h-64 object-cover block mx-auto rounded-lg" 
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            const cleanGps = item.gps ? item.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                            const lat = cleanGps[0] || '14.872185';
-                            const lng = cleanGps[1] || '103.461160';
-                            e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
-                          }}
                         />
                         
                         <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
