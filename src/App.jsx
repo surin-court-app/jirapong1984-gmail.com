@@ -356,7 +356,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // แผนที่ดาวเทียม Yandex พร้อมปรับระบบ Fallback ให้แสดงผลรูปแน่นอน
+  // แผนที่ดาวเทียม Yandex Satellite พร้อมระบบแปลงพิกัดป้องกันภาพเสีย
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -374,7 +374,7 @@ export default function SurinCourtWarrantApp() {
     return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=16&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
   };
 
-  // ฟังก์ชันสร้างเอกสาร Microsoft Word (.doc)
+  // ฟังก์ชันดาวน์โหลดรายงานเป็นไฟล์ Microsoft Word (.doc)
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) {
       alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
@@ -636,7 +636,7 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
-        /* ปรับข้อความoverlay บนรูป GPS ให้เป็นสีดำเข้มคมชัด */
+        /* ปรับข้อความ overlay บนรูป GPS ให้เป็นสีดำเข้ม คมชัด พร้อมพื้นหลังสีขาว */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
@@ -1096,9 +1096,11 @@ export default function SurinCourtWarrantApp() {
                         onError={(e) => {
                           e.target.onerror = null;
                           const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                          const lat = cleanGps[0] || '14.872185';
-                          const lng = cleanGps[1] || '103.461160';
-                          e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${Math.round((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16))}/${Math.round((parseFloat(lng) + 180) / 360 * Math.pow(2, 16))}`;
+                          const lat = parseFloat(cleanGps[0]) || 14.872185;
+                          const lng = parseFloat(cleanGps[1]) || 103.461160;
+                          const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, 16));
+                          const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16));
+                          e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${tileY}/${tileX}`;
                         }}
                       />
                     </div>
@@ -1798,6 +1800,15 @@ export default function SurinCourtWarrantApp() {
                       src={getMapImageUrl(formData.gps)} 
                       alt="แผนที่ GPS" 
                       className="w-full h-64 object-cover block mx-auto rounded-lg" 
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
+                        const lat = parseFloat(cleanGps[0]) || 14.872185;
+                        const lng = parseFloat(cleanGps[1]) || 103.461160;
+                        const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, 16));
+                        const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16));
+                        e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${tileY}/${tileX}`;
+                      }}
                     />
                     
                     <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
@@ -1886,6 +1897,15 @@ export default function SurinCourtWarrantApp() {
                           src={getMapImageUrl(item.gps)} 
                           alt="แผนที่ GPS" 
                           className="w-full h-64 object-cover block mx-auto rounded-lg" 
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            const cleanGps = item.gps ? item.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
+                            const lat = parseFloat(cleanGps[0]) || 14.872185;
+                            const lng = parseFloat(cleanGps[1]) || 103.461160;
+                            const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, 16));
+                            const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16));
+                            e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${tileY}/${tileX}`;
+                          }}
                         />
                         
                         <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
