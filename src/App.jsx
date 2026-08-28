@@ -169,7 +169,16 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  // รับไฟล์ภาพถ่ายตรงๆ ไม่สกรีนข้อความซ้อนทับภาพถ่าย
+  // แปลงพิกัด EXIF GPS (DMS) เป็น Decimal Degrees
+  const convertDMSToDD = (degrees, minutes, seconds, direction) => {
+    let dd = degrees + (minutes / 60) + (seconds / 3600);
+    if (direction === "S" || direction === "W") {
+      dd = dd * -1;
+    }
+    return dd;
+  };
+
+  // อัปโหลดภาพและอ่าน EXIF GPS อัปเดตพิกัดลงแผนที่อัตโนมัติ
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -185,10 +194,33 @@ export default function SurinCourtWarrantApp() {
     validFiles.forEach((file) => {
       const reader = new FileReader();
       reader.onloadend = () => {
+        const resultImgUrl = reader.result;
+
         setFormData((prev) => ({
           ...prev,
-          photos: [...prev.photos, reader.result]
+          photos: [...prev.photos, resultImgUrl]
         }));
+
+        // ตรวจสอบข้อมูล EXIF GPS
+        if (window.EXIF) {
+          const imgElement = new Image();
+          imgElement.onload = () => {
+            window.EXIF.getData(imgElement, function() {
+              const latData = window.EXIF.getTag(this, "GPSLatitude");
+              const latRef = window.EXIF.getTag(this, "GPSLatitudeRef");
+              const lngData = window.EXIF.getTag(this, "GPSLongitude");
+              const lngRef = window.EXIF.getTag(this, "GPSLongitudeRef");
+
+              if (latData && lngData && latRef && lngRef) {
+                const lat = convertDMSToDD(latData[0], latData[1], latData[2], latRef);
+                const lng = convertDMSToDD(lngData[0], lngData[1], lngData[2], lngRef);
+                const extractedGps = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                setFormData(prev => ({ ...prev, gps: extractedGps }));
+              }
+            });
+          };
+          imgElement.src = resultImgUrl;
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -357,7 +389,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // แผนที่ดาวเทียม Yandex ที่ระดับ Zoom 14 สัดส่วน 600x280 คมชัด ไม่แตก และไม่ซูมลึกเกินไป
+  // แผนที่ดาวเทียม Yandex Satellite คมชัด สัดส่วนตรง ไม่เบลอแตก
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -637,17 +669,17 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
-        /* ปรับสไตล์กล่องข้อความOverlay บนภาพแผนที่ GPS ชัดเจน อ่านง่าย ไม่รกสายตา */
+        /* กล่องข้อความพิกัดบนภาพ GPS คมชัด สวยงาม ไม่บังตัวแผนที่ */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
           font-size: 12pt !important;
           line-height: 1.35 !important;
-          background-color: rgba(255, 255, 255, 0.90);
+          background-color: rgba(255, 255, 255, 0.92);
           padding: 6px 12px;
           border-radius: 8px;
           border: 1px solid rgba(0, 0, 0, 0.15);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.12);
           text-shadow: none !important;
         }
 
