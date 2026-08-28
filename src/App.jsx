@@ -355,7 +355,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // สร้างแผนที่เวกเตอร์สไตล์คลีนแบบ Google Maps สว่างใสพร้อมปักหมุดแดง
+  // แผนที่เวกเตอร์สไตล์คลีน สว่างแบบ Google Maps (ใช้ Yandex Vector l=map พร้อมหมุดแดง)
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -370,8 +370,7 @@ export default function SurinCourtWarrantApp() {
         }
       }
     }
-    // สไตล์ OpenStreetMap/Mapnik เวคเตอร์คลีนโทนสว่าง
-    return `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
+    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=16&l=map&size=600,280&pt=${lng},${lat},pm2rdm`;
   };
 
   const handleConfirmBatchPrint = () => {
@@ -939,7 +938,7 @@ export default function SurinCourtWarrantApp() {
                         type="text"
                         value={formData.zipcode || ''}
                         onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
-                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 text-gray-800 font-mono font-bold text-xs"
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-mono font-bold text-xs"
                         placeholder="32000"
                       />
                     </div>
@@ -1012,7 +1011,10 @@ export default function SurinCourtWarrantApp() {
                         className="w-full h-32 object-cover block" 
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${formData.gps ? formData.gps.split(',')[1] : '103.461160'},${formData.gps ? formData.gps.split(',')[0] : '14.872185'}&zoom=16&size=600x280&maptype=mapnik`;
+                          const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
+                          const lat = cleanGps[0] || '14.872185';
+                          const lng = cleanGps[1] || '103.461160';
+                          e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
                         }}
                       />
                     </div>
@@ -1705,7 +1707,10 @@ export default function SurinCourtWarrantApp() {
                       className="w-full h-64 object-cover block mx-auto rounded-lg" 
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${formData.gps ? formData.gps.split(',')[1] : '103.461160'},${formData.gps ? formData.gps.split(',')[0] : '14.872185'}&zoom=16&size=600x280&maptype=mapnik`;
+                        const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
+                        const lat = cleanGps[0] || '14.872185';
+                        const lng = cleanGps[1] || '103.461160';
+                        e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
                       }}
                     />
                     
@@ -1797,7 +1802,10 @@ export default function SurinCourtWarrantApp() {
                           className="w-full h-64 object-cover block mx-auto rounded-lg" 
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${item.gps ? item.gps.split(',')[1] : '103.461160'},${item.gps ? item.gps.split(',')[0] : '14.872185'}&zoom=16&size=600x280&maptype=mapnik`;
+                            const cleanGps = item.gps ? item.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
+                            const lat = cleanGps[0] || '14.872185';
+                            const lng = cleanGps[1] || '103.461160';
+                            e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lng},${lat}&zoom=16&size=600x280&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
                           }}
                         />
                         
