@@ -346,16 +346,17 @@ export default function SurinCourtWarrantApp() {
       navigator.geolocation.getCurrentPosition((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        setFormData(prev => ({ ...prev, gps: `${lat.toFixed(6)}, ${lng.toFixed(6)}` }));
-        addAuditLog('FETCH_GPS', `ดึงพิกัด GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-        alert(`ดึงพิกัด GPS เรียบร้อย: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        const gpsStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        setFormData(prev => ({ ...prev, gps: gpsStr }));
+        addAuditLog('FETCH_GPS', `ดึงพิกัด GPS: ${gpsStr}`);
+        alert(`ดึงพิกัด GPS เรียบร้อย: ${gpsStr}`);
       });
     } else {
       alert("เบราว์เซอร์นี้ไม่รองรับการดึง GPS");
     }
   };
 
-  // แผนที่เวกเตอร์สไตล์คลีน สว่างแบบ Google Maps (ใช้ Yandex Vector l=map พร้อมหมุดแดง)
+  // แผนที่สไตล์เวกเตอร์คลีน โทนสว่าง Google Maps เสถียร 100%
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -370,7 +371,7 @@ export default function SurinCourtWarrantApp() {
         }
       }
     }
-    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=16&l=map&size=600,280&pt=${lng},${lat},pm2rdm`;
+    return `https://maps.geoapify.com/v1/staticmap?style=osm-bright&width=600&height=280&center=lonlat:${lng},${lat}&zoom=16&marker=lonlat:${lng},${lat};color:%23ff0000;size:medium&apiKey=edb8f08146aa42db81223fa80e816a6f`;
   };
 
   const handleConfirmBatchPrint = () => {
