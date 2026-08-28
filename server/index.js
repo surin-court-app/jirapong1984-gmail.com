@@ -51,11 +51,11 @@ const db = createClient({
     )
   `);
 
-  // อัปเดตตารางเพิ่มคอลัมน์ village ในกรณีที่ตารางเดิมสร้างไว้อยู่แล้ว
+  // ตรวจสอบและเพิ่มคอลัมน์ village หากไม่มีในตารางเดิม
   try {
     await db.execute(`ALTER TABLE warrants ADD COLUMN village TEXT`);
   } catch (e) {
-    // ข้ามหากมีคอลัมน์ village อยู่แล้ว
+    // ข้ามหากมีคอลัมน์แล้ว
   }
 
   await db.execute(`
@@ -166,9 +166,9 @@ app.post('/api/warrants/batch', async (req, res) => {
             photos = ?, isSaved = ?
             WHERE id = ?`,
           args: [
-            rec.blackNo, rec.redNo, rec.payer, rec.warrantType, rec.targetName,
-            rec.sendDate, rec.sendTime, rec.address, rec.village || '', rec.subdistrict, rec.district,
-            rec.province, rec.zipcode, rec.warrantResult, rec.price, rec.gps,
+            rec.blackNo || '', rec.redNo || '', rec.payer || '', rec.warrantType || '', rec.targetName || '',
+            rec.sendDate || '', rec.sendTime || '', rec.address || '', rec.village || '', rec.subdistrict || '', rec.district || '',
+            rec.province || 'สุรินทร์', rec.zipcode || '', rec.warrantResult || '', rec.price || '0.00', rec.gps || '',
             JSON.stringify(rec.photos || []), rec.isSaved ? 1 : 0, rec.id
           ]
         });
@@ -180,9 +180,9 @@ app.post('/api/warrants/batch', async (req, res) => {
             warrantResult, price, gps, photos, isSaved
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
-            rec.id, username, rec.blackNo, rec.redNo, rec.payer, rec.warrantType, rec.targetName,
-            rec.sendDate, rec.sendTime, rec.address, rec.village || '', rec.subdistrict, rec.district, rec.province, rec.zipcode,
-            rec.warrantResult, rec.price, rec.gps, JSON.stringify(rec.photos || []), rec.isSaved ? 1 : 0
+            rec.id, username, rec.blackNo || '', rec.redNo || '', rec.payer || '', rec.warrantType || '', rec.targetName || '',
+            rec.sendDate || '', rec.sendTime || '', rec.address || '', rec.village || '', rec.subdistrict || '', rec.district || '', rec.province || 'สุรินทร์', rec.zipcode || '',
+            rec.warrantResult || '', rec.price || '0.00', rec.gps || '', JSON.stringify(rec.photos || []), rec.isSaved ? 1 : 0
           ]
         });
       }
