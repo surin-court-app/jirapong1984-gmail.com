@@ -4,6 +4,78 @@ import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, 
 // ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
+// ข้อมูลอำเภอ ตำบล และรหัสไปรษณีย์ ทั้งหมดในจังหวัดสุรินทร์
+const surinData = {
+  "เมืองสุรินทร์": {
+    zipcode: "32000",
+    subdistricts: ["ในเมือง", "ตั้งใจ", "เพียราม", "นาดี", "ท่าสว่าง", "สลักได", "ตาอ็อง", "สำโรง", "แกใหญ่", "แสลงพันธ์", "ถนลสาด", "เมืองที", "ราม", "บุฤาษี", "ตระแสง", "ชุมพลบุรี", "สระบัว", "นาบัว", "แกเฒ่า", "โคกยาง", "คอโค"]
+  },
+  "ชุมพลบุรี": {
+    zipcode: "32190",
+    subdistricts: ["ชุมพลบุรี", "นาหนองไผ่", "ไพรขลา", "ศรีณรงค์", "ยะวึก", "สระบัว", "เมืองบัว", "หนองเรือ"]
+  },
+  "ท่าตูม": {
+    zipcode: "32120",
+    subdistricts: ["ท่าตูม", "หนองบัว", "เมืองแก", "พรมเทพ", "โพนครก", "ทุ่งกุลา", "บัวโคก", "หนองเมธี", "โพนทราย", "บึงบัว"]
+  },
+  "จอมพระ": {
+    zipcode: "32180",
+    subdistricts: ["จอมพระ", "เมืองลีง", "กระหาด", "บุแก้ว", "หนองสนิท", "บ้านผือ", "ลุ่มระวี", "ชุมแสง", "ขวาโอ"]
+  },
+  "ปราสาท": {
+    zipcode: "32140",
+    subdistricts: ["กังแอน", "ทมก", "ไพล", "ปะอาบ", "บ้านพลวง", "กันตวจระมวล", "บ้านไทร", "โชคนาสาม", "เชื้อเพลิง", "ปราสาทตระเบก", "ตานี", "บ้านพวง", "โคกสะอาด", "โคกยาง", "หนองใหญ่", "ตาเบา", "สมุด", "ประทัดบัว"]
+  },
+  "กาบเชิง": {
+    zipcode: "32210",
+    subdistricts: ["กาบเชิง", "คูบ", "ด่าน", "แนงมุด", "โคกตะเคียน", "ตะเคียน"]
+  },
+  "รัตนบุรี": {
+    zipcode: "32130",
+    subdistricts: ["รัตนบุรี", "ธาตุ", "แกะแอร์", "ดอนยาว", "หนองบัวทอง", "หนองกวัก", "กุดขาคีม", "ยางสว่าง", "เบิด", "น้ำเขียว", "ไผ่"]
+  },
+  "สนม": {
+    zipcode: "32160",
+    subdistricts: ["สนม", "โพนโก", "หนองระเอียง", "แคน", "หัวนานคำ", "นานวน", "หนองอุปโลกน์"]
+  },
+  "ศีขรภูมิ": {
+    zipcode: "32110",
+    subdistricts: ["ระแงง", "ตรึม", "จารพัต", "ยางกล้วย", "แตล", "หนองเหล็ก", "หนองบัว", "คาละแมะ", "หนองขวาว", "ช่างปี่", "กุดโบสถ์", "หนองบัวใต้", "นารายณ์"]
+  },
+  "สังขะ": {
+    zipcode: "32150",
+    subdistricts: ["สังขะ", "ขอนแตก", "ดม", "พระแก้ว", "บ้านจาน", "บ้านบัว", "สะกาด", "ตาตุม", "ทับทัน", "ตาจ็อง", "ตาเกา", "โชคชัย"]
+  },
+  "ลำดวน": {
+    zipcode: "32220",
+    subdistricts: ["ลำดวน", "ตรำดม", "โชคเหนือ", "อู่โลก", "ตระเปียงเตีย"]
+  },
+  "สำโรงทาบ": {
+    zipcode: "32170",
+    subdistricts: ["สำโรงทาบ", "หนองไผ่ล้อม", "กระโปรง", "หมื่นศรี", "เสม็ด", "เกาะแก้ว", "หนองฮะ", "ศรีสุข", "ประดู่", "สะพานหิน"]
+  },
+  "บัวเชด": {
+    zipcode: "32230",
+    subdistricts: ["บัวเชด", "สะเดา", "จรัส", "ตาวัง", "บ้านชำนิ", "หนองแวง"]
+  },
+  "พนมดงรัก": {
+    zipcode: "32140",
+    subdistricts: ["บักได", "โคกกลาง", "จีกเดก", "ตาเมียง"]
+  },
+  "ศรีณรงค์": {
+    zipcode: "32150",
+    subdistricts: ["ณรงค์", "แคน", "ตรวจ", "หนองแวง", "ศรีสุข"]
+  },
+  "เขวาสินรินทร์": {
+    zipcode: "32000",
+    subdistricts: ["เขวาสินรินทร์", "ปราสาททอง", "ตากูก", "บ้านแร่", "บัวเชด"]
+  },
+  "โนนนารายณ์": {
+    zipcode: "32130",
+    subdistricts: ["หนองหลวง", "คำผง", "โนนกอก", "ระเวียง", "หนองเทพ"]
+  }
+};
+
 export default function SurinCourtWarrantApp() {
   const getCurrentTimeStr = () => {
     const now = new Date();
@@ -59,7 +131,7 @@ export default function SurinCourtWarrantApp() {
     warrantType: '', targetName: '', 
     sendDate: todayStr, 
     sendTime: getCurrentTimeStr(),
-    address: '', subdistrict: '', district: '', province: 'สุรินทร์', zipcode: '32140', warrantResult: 'ส่งได้โดยวิธีปิดหมาย', price: '', gps: '', photos: []
+    address: '', subdistrict: '', district: '', province: 'สุรินทร์', zipcode: '32000', warrantResult: 'ส่งได้โดยวิธีปิดหมาย', price: '', gps: '', photos: []
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -224,6 +296,9 @@ export default function SurinCourtWarrantApp() {
               const uniqueRandom = Math.random().toString(36).substring(2, 9);
               const uniqueId = `item_${currentUser.username}_${nowStamp}_${idx}_${uniqueRandom}`;
 
+              const distVal = row[11] ? String(row[11]).trim() : '';
+              const autoZip = surinData[distVal]?.zipcode || '32000';
+
               parsedRecords.push({
                 id: uniqueId,
                 ownerUsername: currentUser.username,
@@ -233,9 +308,9 @@ export default function SurinCourtWarrantApp() {
                 targetName: targetName,
                 address: row[7] ? String(row[7]).trim() : '',
                 subdistrict: row[8] ? String(row[8]).trim() : '',
-                district: row[11] ? String(row[11]).trim() : '',
+                district: distVal,
                 province: 'สุรินทร์',
-                zipcode: '32140',
+                zipcode: autoZip,
                 price: row[13] ? String(row[13]).replace(',', '').trim() : '0.00',
                 warrantResult: 'ส่งได้โดยวิธีปิดหมาย', 
                 gps: '', 
@@ -280,7 +355,7 @@ export default function SurinCourtWarrantApp() {
       subdistrict: item.subdistrict || '',
       district: item.district || '',
       province: item.province || 'สุรินทร์',
-      zipcode: item.zipcode || '32140',
+      zipcode: item.zipcode || surinData[item.district]?.zipcode || '32000',
       warrantResult: item.warrantResult || 'ส่งได้โดยวิธีปิดหมาย',
       price: item.price || '0.00',
       gps: item.gps || '',
@@ -869,22 +944,74 @@ export default function SurinCourtWarrantApp() {
                     <textarea rows="2" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น 127 ม. 5 ซ. - ถ. -"></textarea>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2 md:col-span-3">
+                  {/* Dropdown อำเภอ/ตำบล/รหัสไปรษณีย์ */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 md:col-span-3">
+                    {/* อำเภอ */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">ตำบล</label>
-                      <input type="text" value={formData.subdistrict} onChange={(e) => setFormData({...formData, subdistrict: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น โคกสะอาด" />
+                      <label className="block text-xs font-bold text-amber-900 uppercase mb-1">อำเภอ</label>
+                      <select
+                        value={formData.district}
+                        onChange={(e) => {
+                          const dist = e.target.value;
+                          const autoZip = surinData[dist]?.zipcode || formData.zipcode;
+                          const autoSub = surinData[dist]?.subdistricts[0] || '';
+                          setFormData({
+                            ...formData,
+                            district: dist,
+                            subdistrict: autoSub,
+                            zipcode: autoZip
+                          });
+                        }}
+                        className="w-full p-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-bold text-xs"
+                      >
+                        <option value="">-- เลือกอำเภอ --</option>
+                        {Object.keys(surinData).map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
                     </div>
+
+                    {/* ตำบล */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">อำเภอ</label>
-                      <input type="text" value={formData.district} onChange={(e) => setFormData({...formData, district: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น ปราสาท" />
+                      <label className="block text-xs font-bold text-amber-900 uppercase mb-1">ตำบล</label>
+                      <select
+                        value={formData.subdistrict}
+                        onChange={(e) => setFormData({ ...formData, subdistrict: e.target.value })}
+                        className="w-full p-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-bold text-xs"
+                      >
+                        <option value="">-- เลือกตำบล --</option>
+                        {formData.district && surinData[formData.district] ? (
+                          surinData[formData.district].subdistricts.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))
+                        ) : (
+                          <option value={formData.subdistrict}>{formData.subdistrict || 'เลือกอำเภอก่อน'}</option>
+                        )}
+                      </select>
                     </div>
+
+                    {/* จังหวัด */}
                     <div>
-                      <label className="block text-xs font-bold text-amber-900 uppercase mb-1">จังหวัด</label>
-                      <input type="text" value={formData.province} onChange={(e) => setFormData({...formData, province: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-medium" placeholder="สุรินทร์" />
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">จังหวัด</label>
+                      <input
+                        type="text"
+                        value={formData.province}
+                        onChange={(e) => setFormData({ ...formData, province: e.target.value })}
+                        className="w-full p-2.5 bg-gray-100 border border-gray-300 rounded-lg text-gray-800 font-bold text-xs"
+                        readOnly
+                      />
                     </div>
+
+                    {/* รหัสไปรษณีย์ */}
                     <div>
                       <label className="block text-xs font-bold text-gray-600 uppercase mb-1">รหัสไปรษณีย์</label>
-                      <input type="text" value={formData.zipcode || ''} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น 32140" />
+                      <input
+                        type="text"
+                        value={formData.zipcode}
+                        onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 text-gray-800 font-mono font-bold text-xs"
+                        placeholder="32000"
+                      />
                     </div>
                   </div>
 
