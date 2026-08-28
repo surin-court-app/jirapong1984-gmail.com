@@ -98,11 +98,19 @@ export default function SurinCourtWarrantApp() {
 
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // จดจำการเข้าสู่ระบบผ่าน localStorage เพื่อป้องกันหลุดเวลารีเฟรช
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('srnc_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem('srnc_user');
+  });
+
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('warrantForm');
 
   const [printMode, setPrintMode] = useState('single');
@@ -198,8 +206,7 @@ export default function SurinCourtWarrantApp() {
       if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
       inactivityTimerRef.current = setTimeout(() => {
         addAuditLog('AUTO_LOGOUT_TIMEOUT', 'ระบบออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 30 นาที');
-        setIsLoggedIn(false);
-        setCurrentUser(null);
+        handleLogout();
         alert("คุณไม่ได้ใช้งานระบบเป็นเวลาเกิน 30 นาที ระบบได้ทำการออกจากระบบโดยอัตโนมัติเพื่อความปลอดภัย");
       }, 30 * 60 * 1000);
     };
@@ -453,6 +460,7 @@ export default function SurinCourtWarrantApp() {
       if (data.success) {
         setIsLoggedIn(true);
         setCurrentUser(data.user);
+        localStorage.setItem('srnc_user', JSON.stringify(data.user)); // บันทึก Session
         setLoginError('');
         setPasswordInput('');
         setActiveTab('warrantForm');
@@ -467,7 +475,8 @@ export default function SurinCourtWarrantApp() {
   };
 
   const handleLogout = () => {
-    addAuditLog('LOGOUT', 'ออกจากระบบ');
+    if (currentUser) addAuditLog('LOGOUT', 'ออกจากระบบ');
+    localStorage.removeItem('srnc_user'); // ลบ Session
     setIsLoggedIn(false);
     setCurrentUser(null);
   };
@@ -686,8 +695,8 @@ export default function SurinCourtWarrantApp() {
           <div className="hidden md:flex items-center gap-3 bg-gray-800 px-4 py-1.5 rounded-full border border-gray-700 text-left">
             <User className="w-4 h-4 text-yellow-400" />
             <div>
-              <span className="text-xs font-bold text-white block">{currentUser.fullName} ({currentUser.username})</span>
-              <span className="text-[10px] text-yellow-300 block">{currentUser.position} ({currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'})</span>
+              <span className="text-xs font-bold text-white block">{currentUser?.fullName} ({currentUser?.username})</span>
+              <span className="text-[10px] text-yellow-300 block">{currentUser?.position} ({currentUser?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'})</span>
             </div>
           </div>
           <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white px-3 py-1.5 rounded-lg border border-red-500/30 text-xs flex items-center gap-1.5 transition"><LogOut className="w-3.5 h-3.5" /> ออกจากระบบ</button>
@@ -715,7 +724,7 @@ export default function SurinCourtWarrantApp() {
             >
               <FileText className="w-4 h-4" /> ฟอร์มบันทึกหมาย
             </button>
-            {currentUser.role === 'admin' && (
+            {currentUser?.role === 'admin' && (
               <>
                 <button
                   onClick={() => setActiveTab('auditLogs')}
@@ -746,7 +755,7 @@ export default function SurinCourtWarrantApp() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-amber-200">
                 <div className="flex items-center gap-2 font-bold text-amber-900 text-base">
                   <FileSpreadsheet className="w-5 h-5 text-amber-800" />
-                  <span>จัดการข้อมูลหมายคดี - บัญชี {currentUser.fullName} ({currentUser.username})</span>
+                  <span>จัดการข้อมูลหมายคดี - บัญชี {currentUser?.fullName} ({currentUser?.username})</span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -877,7 +886,7 @@ export default function SurinCourtWarrantApp() {
                 </div>
               ) : (
                 <div className="text-center py-6 bg-white rounded-lg border border-dashed border-amber-300 text-xs text-gray-500">
-                  ยังไม่มีรายการคดีในบัญชีของ <span className="font-bold text-amber-900">{currentUser.fullName}</span>
+                  ยังไม่มีรายการคดีในบัญชีของ <span className="font-bold text-amber-900">{currentUser?.fullName}</span>
                 </div>
               )}
             </div>
@@ -1447,7 +1456,7 @@ export default function SurinCourtWarrantApp() {
         )}
 
         {/* TAB 2: AUDIT LOG (เฉพาะ ADMIN) */}
-        {activeTab === 'auditLogs' && currentUser.role === 'admin' && (
+        {activeTab === 'auditLogs' && currentUser?.role === 'admin' && (
           <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-6 no-print">
             <div className="flex justify-between items-center border-b border-gray-200 pb-3">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -1487,7 +1496,7 @@ export default function SurinCourtWarrantApp() {
         )}
 
         {/* TAB 3: USER MANAGEMENT (เฉพาะ ADMIN) */}
-        {activeTab === 'userManagement' && currentUser.role === 'admin' && (
+        {activeTab === 'userManagement' && currentUser?.role === 'admin' && (
           <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-8 no-print">
             <div className="border border-amber-200 bg-amber-50/40 p-6 rounded-xl">
               <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-amber-200 pb-2">
