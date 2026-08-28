@@ -169,65 +169,8 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  // ฟังก์ชันวาดตัวอักษรข้อมูล GPS / วันเวลา ลงไปบนตัวภาพถ่ายโดยตรง
-  const processImageWithWatermark = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-
-          // วาดภาพต้นฉบับ
-          ctx.drawImage(img, 0, 0);
-
-          // คำนวณขนาดตัวอักษรตามสัดส่วนภาพ
-          const fontSize = Math.max(20, Math.floor(canvas.width / 32));
-          ctx.font = `bold ${fontSize}px 'TH Sarabun New', sans-serif`;
-
-          // ข้อมูลที่จะสกรีนลงบนภาพ
-          const lines = [
-            `GPS: ${formData.gps || 'ไม่ได้ระบุพิกัด'}`,
-            `${formData.village ? formData.village + ' ' : ''}ตำบล ${formData.subdistrict || '-'} อำเภอ ${formData.district || '-'}`,
-            `จังหวัด ${formData.province || 'สุรินทร์'} ${formData.zipcode || ''}`,
-            `วันที่ ${formatThaiDate(formData.sendDate)} เวลา ${formData.sendTime || getCurrentTimeStr()} น.`
-          ];
-
-          const padding = fontSize * 0.5;
-          const lineHeight = fontSize * 1.3;
-          const boxWidth = Math.max(...lines.map(line => ctx.measureText(line).width)) + (padding * 2);
-          const boxHeight = (lines.length * lineHeight) + (padding * 1.5);
-
-          const x = canvas.width - boxWidth - (fontSize * 0.8);
-          const y = canvas.height - boxHeight - (fontSize * 0.8);
-
-          // วาดพื้นหลังสีดำโปร่งแสงรองรับข้อความ
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-          ctx.beginPath();
-          ctx.roundRect ? ctx.roundRect(x, y, boxWidth, boxHeight, 10) : ctx.rect(x, y, boxWidth, boxHeight);
-          ctx.fill();
-
-          // วาดตัวหนังสือสีขาวคมชัด
-          ctx.fillStyle = '#FFFFFF';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'top';
-
-          lines.forEach((line, index) => {
-            ctx.fillText(line, x + padding, y + padding + (index * lineHeight));
-          });
-
-          resolve(canvas.toDataURL('image/jpeg', 0.9));
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleImageChange = async (e) => {
+  // แนบภาพถ่ายโดยตรง ไม่พิมพ์ลายน้ำซ้อนทับ เพื่อป้องกันข้อความขัดกันกับแอปกล้อง
+  const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
@@ -239,16 +182,16 @@ export default function SurinCourtWarrantApp() {
       return true;
     });
 
-    const processedImages = [];
-    for (const file of validFiles) {
-      const watermarkedImgData = await processImageWithWatermark(file);
-      processedImages.push(watermarkedImgData);
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      photos: [...prev.photos, ...processedImages]
-    }));
+    validFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData((prev) => ({
+          ...prev,
+          photos: [...prev.photos, reader.result]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleRemovePhoto = (indexToRemove) => {
@@ -414,9 +357,9 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ดึงแผนที่ดาวเทียมความละเอียดสูง ปรับระดับ Zoom เป็น 14 (ไม่ซูมลึกเกินไป มองเห็นสบายตา)
+  // แผนที่ดาวเทียม Yandex ที่ระดับ Zoom 14 สัดส่วน 600x280 คมชัด ไม่แตก และไม่ซูมลึกเกินไป
   const getMapImageUrl = (gpsVal) => {
-    let lat = 14.872185, lng = 103.461160;
+    let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
       const cleanGps = gpsVal.replace(/[^\d.,-]/g, '').trim();
       const parts = cleanGps.split(',');
@@ -424,15 +367,12 @@ export default function SurinCourtWarrantApp() {
         const parsedLat = parseFloat(parts[0]);
         const parsedLng = parseFloat(parts[1]);
         if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-          lat = parsedLat;
-          lng = parsedLng;
+          lat = parsedLat.toFixed(6);
+          lng = parsedLng.toFixed(6);
         }
       }
     }
-    const zoom = 14; // ระดับการซูมปานกลาง สบายสายตา
-    const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
-    const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
-    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY}/${tileX}`;
+    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
   };
 
   // ฟังก์ชันดาวน์โหลดเอกสาร Microsoft Word (.doc)
@@ -697,16 +637,17 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
-        /* ปรับข้อความ overlay บนรูป GPS ให้เป็นสีดำเข้ม คมชัด พร้อมพื้นหลังสีขาว */
+        /* กล่องข้อความพิกัดบนภาพ GPS คมชัด สวยงาม ไม่บังตัวแผนที่ */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
           font-size: 12pt !important;
           line-height: 1.35 !important;
-          background-color: rgba(255, 255, 255, 0.88);
-          padding: 4px 8px;
-          border-radius: 6px;
-          border: 1px solid rgba(0, 0, 0, 0.2);
+          background-color: rgba(255, 255, 255, 0.92);
+          padding: 6px 12px;
+          border-radius: 8px;
+          border: 1px solid rgba(0, 0, 0, 0.15);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.12);
           text-shadow: none !important;
         }
 
@@ -1157,8 +1098,8 @@ export default function SurinCourtWarrantApp() {
                         onError={(e) => {
                           e.target.onerror = null;
                           const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                          const lat = parseFloat(cleanGps[0]) || 14.872185;
-                          const lng = parseFloat(cleanGps[1]) || 103.461160;
+                          const lat = cleanGps[0] || '14.872185';
+                          const lng = cleanGps[1] || '103.461160';
                           e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
                         }}
                       />
@@ -1864,8 +1805,8 @@ export default function SurinCourtWarrantApp() {
                       onError={(e) => {
                         e.target.onerror = null;
                         const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                        const lat = parseFloat(cleanGps[0]) || 14.872185;
-                        const lng = parseFloat(cleanGps[1]) || 103.461160;
+                        const lat = cleanGps[0] || '14.872185';
+                        const lng = cleanGps[1] || '103.461160';
                         e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
                       }}
                     />
