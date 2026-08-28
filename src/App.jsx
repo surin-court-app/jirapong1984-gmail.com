@@ -554,16 +554,16 @@ export default function SurinCourtWarrantApp() {
         }
 
         .gps-overlay-text {
-  color: #000000 !important;
-  font-weight: 700 !important;
-  font-size: 13pt !important;
-  line-height: 1.35 !important;
-  background-color: rgba(255, 255, 255, 0.85);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  text-shadow: none !important;
-}
+          color: #000000 !important;
+          font-weight: 700 !important;
+          font-size: 12pt !important;
+          line-height: 1.35 !important;
+          background-color: rgba(255, 255, 255, 0.88);
+          padding: 4px 8px;
+          border-radius: 6px;
+          border: 1px solid rgba(0, 0, 0, 0.2);
+          text-shadow: none !important;
+        }
 
         @media print {
           @page {
@@ -938,7 +938,7 @@ export default function SurinCourtWarrantApp() {
                         type="text"
                         value={formData.zipcode || ''}
                         onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
-                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-mono font-bold text-xs"
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 text-gray-800 font-mono font-bold text-xs"
                         placeholder="32000"
                       />
                     </div>
