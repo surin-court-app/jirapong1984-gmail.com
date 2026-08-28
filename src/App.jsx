@@ -27,7 +27,7 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // จดจำการเข้าสู่ระบบผ่าน localStorage เพื่อป้องกันหลุดเวลารีเฟรช
+  // ดึงข้อมูลผู้ใช้งานที่เคยล็อกอินค้างไว้จาก localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('srnc_court_user');
@@ -355,6 +355,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ปรับการดึงรูปแผนที่ให้ดึงเลเยอร์โทนขาว-เทาเป็นหลัก
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -369,7 +370,7 @@ export default function SurinCourtWarrantApp() {
         }
       }
     }
-    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=15&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
+    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=15&l=map&size=600,280&pt=${lng},${lat},pm2rdm`;
   };
 
   const handleConfirmBatchPrint = () => {
@@ -390,7 +391,7 @@ export default function SurinCourtWarrantApp() {
       if (data.success) {
         setIsLoggedIn(true);
         setCurrentUser(data.user);
-        localStorage.setItem('srnc_court_user', JSON.stringify(data.user)); // บันทึก Session
+        localStorage.setItem('srnc_court_user', JSON.stringify(data.user));
         setLoginError('');
         setPasswordInput('');
         setActiveTab('warrantForm');
@@ -406,7 +407,7 @@ export default function SurinCourtWarrantApp() {
 
   const handleLogout = () => {
     if (currentUser) addAuditLog('LOGOUT', 'ออกจากระบบ');
-    localStorage.removeItem('srnc_court_user'); // ล้าง Session
+    localStorage.removeItem('srnc_court_user');
     setIsLoggedIn(false);
     setCurrentUser(null);
   };
@@ -461,7 +462,7 @@ export default function SurinCourtWarrantApp() {
     ];
 
     currentRecords.forEach(rec => {
-      if (!rec.isSaved) return; // เลือกเฉพาะรายการที่บันทึกรายงานแล้ว
+      if (!rec.isSaved) return;
       const dateStr = rec.sendDate || todayStr;
       const parts = dateStr.split('-');
       if (parts.length === 3) {
@@ -482,13 +483,8 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  // รอดำเนินการ = ยังไม่ได้บันทึกรายงาน
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
-  
-  // รายงานแล้ว (เฉพาะวันนี้) = บันทึกรายงานแล้ว + ส่งหมายวันที่ปัจจุบัน
   const todayCompletedRecords = currentRecords.filter(r => r.isSaved && r.sendDate === todayStr);
-
-  // รายงานแล้วทั้งหมด (รวมย้อนหลัง สำหรับปุ่มประวัติ)
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
   let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : todayCompletedRecords;
@@ -1012,7 +1008,7 @@ export default function SurinCourtWarrantApp() {
                       <img 
                         src={getMapImageUrl(formData.gps)} 
                         alt="ภาพพรีวิวแผนที่ GPS" 
-                        className="w-full h-32 object-cover block" 
+                        className="w-full h-32 object-cover block grayscale contrast-125" 
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${formData.gps ? formData.gps.split(',')[1] : '103.461160'},${formData.gps ? formData.gps.split(',')[0] : '14.872185'}&zoom=15&size=600x280&maptype=mapnik`;
@@ -1705,7 +1701,7 @@ export default function SurinCourtWarrantApp() {
                     <img 
                       src={getMapImageUrl(formData.gps)} 
                       alt="แผนที่ GPS" 
-                      className="w-full h-64 object-cover block mx-auto rounded-lg" 
+                      className="w-full h-64 object-cover block mx-auto rounded-lg grayscale contrast-125" 
                       onError={(e) => {
                         e.target.onerror = null;
                         e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${formData.gps ? formData.gps.split(',')[1] : '103.461160'},${formData.gps ? formData.gps.split(',')[0] : '14.872185'}&zoom=15&size=600x280&maptype=mapnik`;
@@ -1797,7 +1793,7 @@ export default function SurinCourtWarrantApp() {
                         <img 
                           src={getMapImageUrl(item.gps)} 
                           alt="แผนที่ GPS" 
-                          className="w-full h-64 object-cover block mx-auto rounded-lg" 
+                          className="w-full h-64 object-cover block mx-auto rounded-lg grayscale contrast-125" 
                           onError={(e) => {
                             e.target.onerror = null;
                             e.target.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${item.gps ? item.gps.split(',')[1] : '103.461160'},${item.gps ? item.gps.split(',')[0] : '14.872185'}&zoom=15&size=600x280&maptype=mapnik`;
