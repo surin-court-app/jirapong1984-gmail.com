@@ -99,13 +99,18 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // จดจำการเข้าสู่ระบบผ่าน localStorage เพื่อป้องกันหลุดเวลารีเฟรช
+  // ดึงข้อมูลผู้ใช้งานที่เคยล็อกอินค้างไว้จาก localStorage
   const [currentUser, setCurrentUser] = useState(() => {
-    const savedUser = localStorage.getItem('srnc_user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      const savedUser = localStorage.getItem('srnc_court_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (e) {
+      return null;
+    }
   });
+
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return !!localStorage.getItem('srnc_user');
+    return !!localStorage.getItem('srnc_court_user');
   });
 
   const [usernameInput, setUsernameInput] = useState('');
@@ -404,7 +409,7 @@ export default function SurinCourtWarrantApp() {
   };
 
   const handleDeleteAllRecords = async () => {
-    if (window.confirm(`คำเตือน! ลบรายการคดีทั้งหมดในบัญชีของ "${currentUser.fullName}" ใช่หรือไม่?`)) {
+    if (window.confirm(`คำเตือน! ลบรายการคดีทั้งหมดในบัญชีของ "${currentUser?.fullName}" ใช่หรือไม่?`)) {
       await fetch(`${API_URL}/warrants/owner/${currentUser.username}`, { method: 'DELETE' });
       fetchUserWarrants(currentUser.username);
       addAuditLog('DELETE_ALL_RECORDS', `ลบรายการคดีทั้งหมดในบัญชี`);
@@ -460,7 +465,7 @@ export default function SurinCourtWarrantApp() {
       if (data.success) {
         setIsLoggedIn(true);
         setCurrentUser(data.user);
-        localStorage.setItem('srnc_user', JSON.stringify(data.user)); // บันทึก Session
+        localStorage.setItem('srnc_court_user', JSON.stringify(data.user)); // บันทึกข้อมูล Session ลง LocalStorage
         setLoginError('');
         setPasswordInput('');
         setActiveTab('warrantForm');
@@ -476,7 +481,7 @@ export default function SurinCourtWarrantApp() {
 
   const handleLogout = () => {
     if (currentUser) addAuditLog('LOGOUT', 'ออกจากระบบ');
-    localStorage.removeItem('srnc_user'); // ลบ Session
+    localStorage.removeItem('srnc_court_user'); // ล้างข้อมูล Session
     setIsLoggedIn(false);
     setCurrentUser(null);
   };
