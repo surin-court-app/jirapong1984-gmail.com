@@ -414,7 +414,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ดึงแผนที่ดาวเทียมความละเอียดสูงจาก ESRI Tile API เสถียร 100%
+  // ดึงแผนที่ดาวเทียมความละเอียดสูง ปรับระดับ Zoom เป็น 14 (ไม่ซูมลึกเกินไป มองเห็นสบายตา)
   const getMapImageUrl = (gpsVal) => {
     let lat = 14.872185, lng = 103.461160;
     if (gpsVal && typeof gpsVal === 'string') {
@@ -429,7 +429,7 @@ export default function SurinCourtWarrantApp() {
         }
       }
     }
-    const zoom = 16;
+    const zoom = 14; // ระดับการซูมปานกลาง สบายสายตา
     const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
     const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
     return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY}/${tileX}`;
@@ -1083,7 +1083,7 @@ export default function SurinCourtWarrantApp() {
                         type="text"
                         value={formData.zipcode || ''}
                         onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
-                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-mono font-bold text-xs"
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 text-gray-800 font-mono font-bold text-xs"
                         placeholder="32000"
                       />
                     </div>
@@ -1159,9 +1159,7 @@ export default function SurinCourtWarrantApp() {
                           const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
                           const lat = parseFloat(cleanGps[0]) || 14.872185;
                           const lng = parseFloat(cleanGps[1]) || 103.461160;
-                          const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, 16));
-                          const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16));
-                          e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${tileY}/${tileX}`;
+                          e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
                         }}
                       />
                     </div>
@@ -1868,9 +1866,7 @@ export default function SurinCourtWarrantApp() {
                         const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
                         const lat = parseFloat(cleanGps[0]) || 14.872185;
                         const lng = parseFloat(cleanGps[1]) || 103.461160;
-                        const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, 16));
-                        const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16));
-                        e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${tileY}/${tileX}`;
+                        e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
                       }}
                     />
                     
@@ -1878,7 +1874,7 @@ export default function SurinCourtWarrantApp() {
                       <div>GPS: {formData.gps || "14.872186, 103.461157"}</div>
                       <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || 'โคกสะอาด'} อำเภอ {formData.district || 'ปราสาท'}</div>
                       <div>จังหวัด {formData.province || 'สุรินทร์'} {formData.zipcode || '32140'}</div>
-                      <div>วันที่ {formatThaiDate(formData.sendDate)}</div>
+                      <div>วันที่ {formatThaiDate(formData.sendDate)} เวลา {formData.sendTime || getCurrentTimeStr()} น.</div>
                     </div>
                   </div>
 
@@ -1965,9 +1961,7 @@ export default function SurinCourtWarrantApp() {
                             const cleanGps = item.gps ? item.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
                             const lat = parseFloat(cleanGps[0]) || 14.872185;
                             const lng = parseFloat(cleanGps[1]) || 103.461160;
-                            const tileX = Math.floor((lng + 180) / 360 * Math.pow(2, 16));
-                            const tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 16));
-                            e.target.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/${tileY}/${tileX}`;
+                            e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
                           }}
                         />
                         
@@ -1975,7 +1969,7 @@ export default function SurinCourtWarrantApp() {
                           <div>GPS: {item.gps || "14.872186, 103.461157"}</div>
                           <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || 'โคกสะอาด'} อำเภอ {item.district || 'ปราสาท'}</div>
                           <div>จังหวัด {item.province || 'สุรินทร์'} {item.zipcode || '32140'}</div>
-                          <div>วันที่ {formatThaiDate(item.sendDate)}</div>
+                          <div>วันที่ {formatThaiDate(item.sendDate)} เวลา {item.sendTime || getCurrentTimeStr()} น.</div>
                         </div>
                       </div>
 
