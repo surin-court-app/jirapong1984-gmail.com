@@ -15,80 +15,84 @@ const db = createClient({
 });
 
 (async () => {
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      password TEXT,
-      fullName TEXT,
-      position TEXT,
-      role TEXT
-    )
-  `);
-
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS warrants (
-      id TEXT PRIMARY KEY,
-      ownerUsername TEXT,
-      blackNo TEXT,
-      redNo TEXT,
-      payer TEXT,
-      warrantType TEXT,
-      targetName TEXT,
-      sendDate TEXT,
-      sendTime TEXT,
-      address TEXT,
-      village TEXT,
-      subdistrict TEXT,
-      district TEXT,
-      province TEXT,
-      zipcode TEXT,
-      warrantResult TEXT,
-      price TEXT,
-      gps TEXT,
-      photos TEXT,
-      isSaved INTEGER DEFAULT 0
-    )
-  `);
-
-  // ตรวจสอบและเพิ่มคอลัมน์ village หากไม่มีในตารางเดิม
   try {
-    await db.execute(`ALTER TABLE warrants ADD COLUMN village TEXT`);
-  } catch (e) {
-    // ข้ามหากมีคอลัมน์แล้ว
-  }
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        fullName TEXT,
+        position TEXT,
+        role TEXT
+      )
+    `);
 
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS audit_logs (
-      id TEXT PRIMARY KEY,
-      timestamp TEXT,
-      username TEXT,
-      fullName TEXT,
-      action TEXT,
-      details TEXT
-    )
-  `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS warrants (
+        id TEXT PRIMARY KEY,
+        ownerUsername TEXT,
+        blackNo TEXT,
+        redNo TEXT,
+        payer TEXT,
+        warrantType TEXT,
+        targetName TEXT,
+        sendDate TEXT,
+        sendTime TEXT,
+        address TEXT,
+        village TEXT,
+        subdistrict TEXT,
+        district TEXT,
+        province TEXT,
+        zipcode TEXT,
+        warrantResult TEXT,
+        price TEXT,
+        gps TEXT,
+        photos TEXT,
+        isSaved INTEGER DEFAULT 0
+      )
+    `);
 
-  const adminExists = await db.execute({
-    sql: 'SELECT * FROM users WHERE username = ?',
-    args: ['admin']
-  });
-  if (adminExists.rows.length === 0) {
-    await db.execute({
-      sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
-      args: ['admin', 'admin1234', 'ต้อมครับ', 'ตะพุ่นหญ้าช้าง', 'admin']
+    // ป้องกันกรณีโครงสร้างตารางเดิมไม่มีคอลัมน์ village
+    try {
+      await db.execute(`ALTER TABLE warrants ADD COLUMN village TEXT`);
+    } catch (e) {
+      // ข้ามถ้ามีอยู่แล้ว
+    }
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT,
+        username TEXT,
+        fullName TEXT,
+        action TEXT,
+        details TEXT
+      )
+    `);
+
+    const adminExists = await db.execute({
+      sql: 'SELECT * FROM users WHERE username = ?',
+      args: ['admin']
     });
-  }
+    if (adminExists.rows.length === 0) {
+      await db.execute({
+        sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
+        args: ['admin', 'admin1234', 'ต้อมครับ', 'ตะพุ่นหญ้าช้าง', 'admin']
+      });
+    }
 
-  const userExists = await db.execute({
-    sql: 'SELECT * FROM users WHERE username = ?',
-    args: ['tomsound']
-  });
-  if (userExists.rows.length === 0) {
-    await db.execute({
-      sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
-      args: ['tomsound', 'Jira.man1984', 'นายจิรพงษ์ มณีปรุ', 'พนักงานคอมพิวเตอร์', 'admin']
+    const userExists = await db.execute({
+      sql: 'SELECT * FROM users WHERE username = ?',
+      args: ['tomsound']
     });
+    if (userExists.rows.length === 0) {
+      await db.execute({
+        sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
+        args: ['tomsound', 'Jira.man1984', 'นายจิรพงษ์ มณีปรุ', 'พนักงานคอมพิวเตอร์', 'admin']
+      });
+    }
+  } catch (err) {
+    console.error("Database Init Error:", err);
   }
 })();
 
@@ -137,16 +141,20 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 app.get('/api/warrants/:username', async (req, res) => {
-  const result = await db.execute({
-    sql: 'SELECT * FROM warrants WHERE ownerUsername = ?',
-    args: [req.params.username]
-  });
-  const parsed = result.rows.map(w => ({
-    ...w,
-    isSaved: w.isSaved === 1,
-    photos: JSON.parse(w.photos || '[]')
-  }));
-  res.json(parsed);
+  try {
+    const result = await db.execute({
+      sql: 'SELECT * FROM warrants WHERE ownerUsername = ?',
+      args: [req.params.username]
+    });
+    const parsed = result.rows.map(w => ({
+      ...w,
+      isSaved: w.isSaved === 1,
+      photos: JSON.parse(w.photos || '[]')
+    }));
+    res.json(parsed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/warrants/batch', async (req, res) => {
@@ -157,6 +165,28 @@ app.post('/api/warrants/batch', async (req, res) => {
         sql: 'SELECT id FROM warrants WHERE id = ?',
         args: [rec.id]
       });
+
+      const params = [
+        rec.blackNo || '',
+        rec.redNo || '',
+        rec.payer || '',
+        rec.warrantType || '',
+        rec.targetName || '',
+        rec.sendDate || '',
+        rec.sendTime || '',
+        rec.address || '',
+        rec.village || '',
+        rec.subdistrict || '',
+        rec.district || '',
+        rec.province || 'สุรินทร์',
+        rec.zipcode || '',
+        rec.warrantResult || '',
+        rec.price || '0.00',
+        rec.gps || '',
+        JSON.stringify(rec.photos || []),
+        rec.isSaved ? 1 : 0
+      ];
+
       if (existing.rows.length > 0) {
         await db.execute({
           sql: `UPDATE warrants SET 
@@ -165,31 +195,23 @@ app.post('/api/warrants/batch', async (req, res) => {
             province = ?, zipcode = ?, warrantResult = ?, price = ?, gps = ?,
             photos = ?, isSaved = ?
             WHERE id = ?`,
-          args: [
-            rec.blackNo || '', rec.redNo || '', rec.payer || '', rec.warrantType || '', rec.targetName || '',
-            rec.sendDate || '', rec.sendTime || '', rec.address || '', rec.village || '', rec.subdistrict || '', rec.district || '',
-            rec.province || 'สุรินทร์', rec.zipcode || '', rec.warrantResult || '', rec.price || '0.00', rec.gps || '',
-            JSON.stringify(rec.photos || []), rec.isSaved ? 1 : 0, rec.id
-          ]
+          args: [...params, rec.id]
         });
       } else {
         await db.execute({
           sql: `INSERT INTO warrants (
-            id, ownerUsername, blackNo, redNo, payer, warrantType, targetName,
-            sendDate, sendTime, address, village, subdistrict, district, province, zipcode,
-            warrantResult, price, gps, photos, isSaved
+            blackNo, redNo, payer, warrantType, targetName,
+            sendDate, sendTime, address, village, subdistrict, district,
+            province, zipcode, warrantResult, price, gps,
+            photos, isSaved, id, ownerUsername
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [
-            rec.id, username, rec.blackNo || '', rec.redNo || '', rec.payer || '', rec.warrantType || '', rec.targetName || '',
-            rec.sendDate || '', rec.sendTime || '', rec.address || '', rec.village || '', rec.subdistrict || '', rec.district || '', rec.province || 'สุรินทร์', rec.zipcode || '',
-            rec.warrantResult || '', rec.price || '0.00', rec.gps || '', JSON.stringify(rec.photos || []), rec.isSaved ? 1 : 0
-          ]
+          args: [...params, rec.id, username]
         });
       }
     }
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("Batch Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
