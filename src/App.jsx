@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown } from 'lucide-react';
 
-// ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
 export default function SurinCourtWarrantApp() {
@@ -27,7 +26,6 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // ดึงข้อมูลผู้ใช้งานที่เคยล็อกอินค้างไว้จาก localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('srnc_court_user');
@@ -58,7 +56,6 @@ export default function SurinCourtWarrantApp() {
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
 
-  // State สำหรับคลังโฟลเดอร์ย้อนหลัง
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -169,7 +166,6 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  // แปลงพิกัด EXIF GPS (DMS) เป็น Decimal Degrees
   const convertDMSToDD = (degrees, minutes, seconds, direction) => {
     let dd = degrees + (minutes / 60) + (seconds / 3600);
     if (direction === "S" || direction === "W") {
@@ -178,7 +174,6 @@ export default function SurinCourtWarrantApp() {
     return dd;
   };
 
-  // อัปโหลดภาพและอ่าน EXIF GPS อัปเดตพิกัดลงแผนที่อัตโนมัติ
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -201,7 +196,6 @@ export default function SurinCourtWarrantApp() {
           photos: [...prev.photos, resultImgUrl]
         }));
 
-        // ตรวจสอบข้อมูล EXIF GPS
         if (window.EXIF) {
           const imgElement = new Image();
           imgElement.onload = () => {
@@ -389,7 +383,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // แผนที่ดาวเทียม Yandex Satellite คมชัด สัดส่วนตรง ไม่เบลอแตก
+  // แผนที่ดาวเทียม Yandex ที่ระดับ Zoom 14 คมชัด ไม่แตก และปรับเปลี่ยนตามค่าพิกัดใน formData.gps
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -407,7 +401,6 @@ export default function SurinCourtWarrantApp() {
     return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
   };
 
-  // ฟังก์ชันดาวน์โหลดเอกสาร Microsoft Word (.doc)
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) {
       alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
@@ -570,7 +563,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // คำนวณการจัดกลุ่มคลังข้อมูลโฟลเดอร์ (ปี พ.ศ. -> เดือน -> วันที่)
   const getGroupedArchive = () => {
     const archive = {};
     const monthNames = [
@@ -669,7 +661,6 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
-        /* กล่องข้อความพิกัดบนภาพ GPS คมชัด สวยงาม ไม่บังตัวแผนที่ */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
@@ -1845,7 +1836,7 @@ export default function SurinCourtWarrantApp() {
                     
                     <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
                       <div>GPS: {formData.gps || "14.872186, 103.461157"}</div>
-                      <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || 'โคกสะอาด'} อำเภอ {formData.district || 'ปราสาท'}</div>
+                      <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || 'โชคนาสาม'} อำเภอ {formData.district || 'ปราสาท'}</div>
                       <div>จังหวัด {formData.province || 'สุรินทร์'} {formData.zipcode || '32140'}</div>
                       <div>วันที่ {formatThaiDate(formData.sendDate)} เวลา {formData.sendTime || getCurrentTimeStr()} น.</div>
                     </div>
@@ -1940,7 +1931,7 @@ export default function SurinCourtWarrantApp() {
                         
                         <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
                           <div>GPS: {item.gps || "14.872186, 103.461157"}</div>
-                          <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || 'โคกสะอาด'} อำเภอ {item.district || 'ปราสาท'}</div>
+                          <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || 'โชคนาสาม'} อำเภอ {item.district || 'ปราสาท'}</div>
                           <div>จังหวัด {item.province || 'สุรินทร์'} {item.zipcode || '32140'}</div>
                           <div>วันที่ {formatThaiDate(item.sendDate)} เวลา {item.sendTime || getCurrentTimeStr()} น.</div>
                         </div>
