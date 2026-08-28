@@ -169,7 +169,7 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  // แนบภาพถ่ายโดยตรง ไม่พิมพ์ลายน้ำซ้อนทับ เพื่อป้องกันข้อความขัดกันกับแอปกล้อง
+  // รับไฟล์ภาพถ่ายตรงๆ ไม่สกรีนข้อความซ้อนทับภาพถ่าย
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -637,17 +637,17 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
-        /* กล่องข้อความพิกัดบนภาพ GPS คมชัด สวยงาม ไม่บังตัวแผนที่ */
+        /* ปรับสไตล์กล่องข้อความOverlay บนภาพแผนที่ GPS ชัดเจน อ่านง่าย ไม่รกสายตา */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
           font-size: 12pt !important;
           line-height: 1.35 !important;
-          background-color: rgba(255, 255, 255, 0.92);
+          background-color: rgba(255, 255, 255, 0.90);
           padding: 6px 12px;
           border-radius: 8px;
           border: 1px solid rgba(0, 0, 0, 0.15);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
           text-shadow: none !important;
         }
 
@@ -1098,8 +1098,8 @@ export default function SurinCourtWarrantApp() {
                         onError={(e) => {
                           e.target.onerror = null;
                           const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                          const lat = cleanGps[0] || '14.872185';
-                          const lng = cleanGps[1] || '103.461160';
+                          const lat = parseFloat(cleanGps[0]) || 14.872185;
+                          const lng = parseFloat(cleanGps[1]) || 103.461160;
                           e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
                         }}
                       />
@@ -1805,8 +1805,8 @@ export default function SurinCourtWarrantApp() {
                       onError={(e) => {
                         e.target.onerror = null;
                         const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                        const lat = cleanGps[0] || '14.872185';
-                        const lng = cleanGps[1] || '103.461160';
+                        const lat = parseFloat(cleanGps[0]) || 14.872185;
+                        const lng = parseFloat(cleanGps[1]) || 103.461160;
                         e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
                       }}
                     />
