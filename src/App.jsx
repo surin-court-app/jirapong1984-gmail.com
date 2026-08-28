@@ -554,17 +554,16 @@ export default function SurinCourtWarrantApp() {
         }
 
         .gps-overlay-text {
-          color: #ffffff !important;
-          font-weight: 800 !important;
-          font-size: 13pt !important;
-          line-height: 1.25 !important;
-          text-shadow: 
-            -1.5px -1.5px 0 #000,  
-             1.5px -1.5px 0 #000,
-            -1.5px  1.5px 0 #000,
-             1.5px  1.5px 0 #000,
-             0px 2px 4px rgba(0,0,0,0.9);
-        }
+  color: #000000 !important;
+  font-weight: 700 !important;
+  font-size: 13pt !important;
+  line-height: 1.35 !important;
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  text-shadow: none !important;
+}
 
         @media print {
           @page {
