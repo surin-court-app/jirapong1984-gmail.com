@@ -27,7 +27,6 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // ดึงข้อมูลผู้ใช้งานที่เคยล็อกอินค้างไว้จาก localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('srnc_court_user');
@@ -58,7 +57,6 @@ export default function SurinCourtWarrantApp() {
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
 
-  // State สำหรับคลังโฟลเดอร์ย้อนหลัง
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -169,13 +167,51 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  const handleImageChange = (e) => {
+  // ฟังก์ชันย่อขนาดภาพ (Resize & Compress) ฝั่ง Client ให้ไฟล์ขนาดเล็กลง โหลดเร็วขึ้น
+  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedDataUrl);
+        };
+      };
+    });
+  };
+
+  // ปรับการรับไฟล์รูปถ่ายให้ผ่านการบีบอัดขนาดภาพก่อนบันทึกเข้า State
+  const handleImageChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
     const validFiles = files.filter(file => {
-      if (file.size > 8 * 1024 * 1024) {
-        alert(`ไฟล์ ${file.name} มีขนาดเกิน 8MB`);
+      if (file.size > 12 * 1024 * 1024) {
+        alert(`ไฟล์ ${file.name} มีขนาดเกิน 12MB`);
         return false;
       }
       return true;
@@ -185,19 +221,21 @@ export default function SurinCourtWarrantApp() {
     const uploadDateStr = uploadNow.toISOString().split('T')[0];
     const uploadTimeStr = `${String(uploadNow.getHours()).padStart(2, '0')}:${String(uploadNow.getMinutes()).padStart(2, '0')}`;
 
-    validFiles.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const resultImgUrl = reader.result;
+    for (const file of validFiles) {
+      try {
+        // ย่อขนาดไฟล์ให้เล็กกระทัดรัด (ประมาณ 150KB - 300KB)
+        const compressedBase64 = await compressImage(file);
+
         setFormData((prev) => ({
           ...prev,
-          photos: [...prev.photos, resultImgUrl],
+          photos: [...prev.photos, compressedBase64],
           sendDate: uploadDateStr,
           sendTime: uploadTimeStr
         }));
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (err) {
+        console.error("เกิดข้อผิดพลาดในการย่อขนาดภาพ:", err);
+      }
+    }
   };
 
   const handleRemovePhoto = (indexToRemove) => {
