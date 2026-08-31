@@ -396,7 +396,7 @@ export default function SurinCourtWarrantApp() {
 
     let photosHtml = '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
     if (formData.photos.length === 1) {
-      photosHtml = `<img src="${formData.photos[0]}" style="max-width: 100%; max-height: 480px; object-fit: contain;"/>`;
+      photosHtml = `<img src="${formData.photos[0]}" style="max-width: 100%; max-height: 380px; object-fit: contain;"/>`;
     } else if (formData.photos.length > 1) {
       let rowsHtml = '';
       for (let i = 0; i < formData.photos.length; i += 2) {
@@ -404,8 +404,8 @@ export default function SurinCourtWarrantApp() {
         const img2 = formData.photos[i + 1];
         rowsHtml += `
           <tr>
-            <td style="width: 50%; padding: 4px; text-align: center;"><img src="${img1}" style="max-width: 100%; max-height: 280px; object-fit: contain;"/></td>
-            <td style="width: 50%; padding: 4px; text-align: center;">${img2 ? `<img src="${img2}" style="max-width: 100%; max-height: 280px; object-fit: contain;"/>` : ''}</td>
+            <td style="width: 50%; padding: 4px; text-align: center;"><img src="${img1}" style="max-width: 100%; max-height: 220px; object-fit: contain;"/></td>
+            <td style="width: 50%; padding: 4px; text-align: center;">${img2 ? `<img src="${img2}" style="max-width: 100%; max-height: 220px; object-fit: contain;"/>` : ''}</td>
           </tr>
         `;
       }
@@ -418,7 +418,7 @@ export default function SurinCourtWarrantApp() {
         <meta charset='utf-8'>
         <title>บันทึกการปิดหมาย</title>
         <style>
-          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 4.5rem; }
+          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 1.5rem; }
           .center { text-align: center; }
           .right { text-align: right; }
           .bold { font-weight: bold; }
@@ -453,8 +453,8 @@ export default function SurinCourtWarrantApp() {
         <br/>
         <div class="center bold">ลักษณะบ้าน <span class="underline-dot">${formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
         <br/>
-        <div class="center" style="margin-top: 20px;">
-          <div class="bold" style="font-size: 14pt; margin-bottom: 10px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
+        <div class="center" style="margin-top: 15px;">
+          <div class="bold" style="font-size: 14pt; margin-bottom: 8px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
           ${photosHtml}
         </div>
       </body>
@@ -652,7 +652,7 @@ export default function SurinCourtWarrantApp() {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 1.8cm 1.0cm 0.3cm 1.0cm !important;
+            margin: 0.3cm 1.0cm 0.3cm 1.0cm !important;
           }
           html, body {
             height: auto !important;
@@ -673,7 +673,7 @@ export default function SurinCourtWarrantApp() {
             display: block !important;
             width: 100% !important;
             margin: 0 !important;
-            padding-top: 2.5rem !important;
+            padding-top: 0rem !important;
             border: none !important;
           }
           .page-single {
@@ -1694,7 +1694,7 @@ export default function SurinCourtWarrantApp() {
           {printMode === 'single' && (
             <div className="page-single flex flex-col justify-between">
               <div>
-                <div className="text-center font-bold text-xl mb-0.5 pt-6">
+                <div className="text-center font-bold text-xl mb-0.5">
                   บันทึกการปิดหมาย / คำบังคับ
                 </div>
 
@@ -1741,19 +1741,19 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* การแสดงผลรูปภาพในรายงาน PDF A4 (ขยายกรอบภาพใหญ่ อ่านลายน้ำ/ตัวเลขบนภาพชัดเจน) */}
+              {/* การแสดงผลรูปภาพในรายงาน PDF A4 (ขนาดกระชับ ไม่ล้นขอบล่างกระดาษ) */}
               <div className="mt-1 space-y-1">
                 {formData.photos.length === 1 && (
-                  <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-96 bg-white">
-                    <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-96 object-contain mx-auto rounded-lg" />
+                  <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
+                    <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-80 object-contain mx-auto rounded-lg" />
                   </div>
                 )}
 
                 {formData.photos.length > 1 && (
                   <div className="grid grid-cols-2 gap-2 w-full max-h-96 overflow-hidden">
                     {formData.photos.map((photo, pIdx) => (
-                      <div key={pIdx} className="w-full h-56 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
-                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                      <div key={pIdx} className="w-full h-44 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
+                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="max-w-full max-h-44 object-contain rounded-lg" />
                       </div>
                     ))}
                   </div>
@@ -1774,7 +1774,7 @@ export default function SurinCourtWarrantApp() {
               {recordsToBatchPrint.map((item, idx) => (
                 <div key={item.id || idx} className="page-batch flex flex-col justify-between pt-1">
                   <div>
-                    <div className="text-center font-bold text-xl mb-0.5 pt-6">
+                    <div className="text-center font-bold text-xl mb-0.5">
                       บันทึกการปิดหมาย / คำบังคับ
                     </div>
 
@@ -1823,16 +1823,16 @@ export default function SurinCourtWarrantApp() {
 
                   <div className="mt-1 space-y-1">
                     {item.photos && item.photos.length === 1 && (
-                      <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-96 bg-white">
-                        <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-96 object-contain mx-auto rounded-lg" />
+                      <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
+                        <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-80 object-contain mx-auto rounded-lg" />
                       </div>
                     )}
 
                     {item.photos && item.photos.length > 1 && (
                       <div className="grid grid-cols-2 gap-2 w-full max-h-96 overflow-hidden">
                         {item.photos.map((photo, pIdx) => (
-                          <div key={pIdx} className="w-full h-56 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
-                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                          <div key={pIdx} className="w-full h-44 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
+                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="max-w-full max-h-44 object-contain rounded-lg" />
                           </div>
                         ))}
                       </div>
