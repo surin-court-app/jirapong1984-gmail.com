@@ -178,7 +178,7 @@ export default function SurinCourtWarrantApp() {
     return dd;
   };
 
-  // เลือกอัปโหลดไฟล์ภาพรองรับทั้ง iOS และ Android
+  // เลือกอัปโหลดไฟล์ภาพ และอัปเดต "วันที่อัปโหลดภาพ" + "พิกัด GPS" ลงในฟอร์มให้อัตโนมัติ
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -191,17 +191,25 @@ export default function SurinCourtWarrantApp() {
       return true;
     });
 
+    // ดึงวันที่ปัจจุบันที่ทำการอัปโหลดภาพ
+    const uploadNow = new Date();
+    const uploadDateStr = uploadNow.toISOString().split('T')[0];
+    const uploadTimeStr = `${String(uploadNow.getHours()).padStart(2, '0')}:${String(uploadNow.getMinutes()).padStart(2, '0')}`;
+
     validFiles.forEach((file) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const resultImgUrl = reader.result;
 
+        // บันทึกรูป และอัปเดตวันที่/เวลาอัปโหลดภาพลงใน formData
         setFormData((prev) => ({
           ...prev,
-          photos: [...prev.photos, resultImgUrl]
+          photos: [...prev.photos, resultImgUrl],
+          sendDate: uploadDateStr,
+          sendTime: uploadTimeStr
         }));
 
-        // ตรวจสอบข้อมูล EXIF GPS เพื่ออัปเดตลงฟอร์ม
+        // ตรวจสอบข้อมูล EXIF GPS
         if (window.EXIF) {
           const imgElement = new window.Image();
           imgElement.onload = () => {
@@ -1142,7 +1150,7 @@ export default function SurinCourtWarrantApp() {
                       <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
                     </div>
 
-                    {/* ปุ่มเลือกอัปโหลดไฟล์ภาพจากคลังอัลบั้มเท่านั้น (เอา capture="environment" ออก) */}
+                    {/* ปุ่มเลือกรูปถ่ายจากอัลบั้ม เปิดหน้าต่างเลือกไฟล์ภาพในสมาร์ตโฟน/คอมพิวเตอร์ */}
                     <label className="w-full bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
                       <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่
                       <input 
