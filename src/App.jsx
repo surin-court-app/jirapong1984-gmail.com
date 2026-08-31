@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image } from 'lucide-react';
 
+// ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
 export default function SurinCourtWarrantApp() {
@@ -26,6 +27,7 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
+  // ดึงข้อมูลผู้ใช้งานที่เคยล็อกอินค้างไว้จาก localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('srnc_court_user');
@@ -56,6 +58,7 @@ export default function SurinCourtWarrantApp() {
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
 
+  // State สำหรับคลังโฟลเดอร์ย้อนหลัง
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -365,8 +368,6 @@ export default function SurinCourtWarrantApp() {
           .bold { font-weight: bold; }
           .title { font-size: 20pt; font-weight: bold; text-align: center; margin-bottom: 10px; }
           .underline-dot { border-bottom: 1px dotted #000; padding: 0 5px; font-weight: bold; }
-          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-          td { vertical-align: top; text-align: center; padding: 5px; }
           img { max-width: 100%; height: auto; border-radius: 8px; }
         </style>
       </head>
@@ -396,9 +397,9 @@ export default function SurinCourtWarrantApp() {
         <br/>
         <div class="center bold">ลักษณะบ้าน <span class="underline-dot">${formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
         <br/>
-        <div class="center" style="margin-top: 20px;">
-          <div class="bold" style="font-size: 14pt; margin-bottom: 10px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
-          ${formData.photos.length > 0 ? `<img src="${formData.photos[0]}" width="550"/>` : '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>'}
+        <div class="center" style="margin-top: 25px;">
+          <div class="bold" style="font-size: 14pt; margin-bottom: 12px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
+          ${formData.photos.length > 0 ? `<img src="${formData.photos[0]}" width="580"/>` : '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>'}
         </div>
       </body>
       </html>
