@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image } from 'lucide-react';
 
-// ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
 export default function SurinCourtWarrantApp() {
@@ -27,7 +26,6 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // ดึงข้อมูลผู้ใช้งานที่เคยล็อกอินค้างไว้จาก localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('srnc_court_user');
@@ -58,7 +56,6 @@ export default function SurinCourtWarrantApp() {
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
 
-  // State สำหรับคลังโฟลเดอร์ย้อนหลัง
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -169,7 +166,6 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  // แปลงพิกัด EXIF GPS (DMS) เป็น Decimal Degrees
   const convertDMSToDD = (degrees, minutes, seconds, direction) => {
     let dd = degrees + (minutes / 60) + (seconds / 3600);
     if (direction === "S" || direction === "W") {
@@ -178,7 +174,7 @@ export default function SurinCourtWarrantApp() {
     return dd;
   };
 
-  // ดึงพิกัดสกัดจากภาพถ่ายอัปเดตลงฟอร์มและส่งต่อให้แผนที่ดาวเทียมแสดงผล
+  // เมื่อเลือกอัปโหลดภาพ จะทำการดึงข้อมูล EXIF GPS + วันเวลา เพื่ออัปเดตลงฟอร์มและป้ายบนภาพแผนที่ดาวเทียมทันที
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -207,7 +203,6 @@ export default function SurinCourtWarrantApp() {
           sendTime: uploadTimeStr
         }));
 
-        // อ่าน EXIF GPS หากมี
         if (window.EXIF) {
           const imgElement = new window.Image();
           imgElement.onload = () => {
@@ -395,7 +390,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // สร้าง URL ภาพแผนที่ดาวเทียม Yandex Satellite ปักหมุดตามพิกัดตรงกับรูปถ่ายสถานที่
+  // สร้าง URL แผนที่ดาวเทียม Yandex Satellite ปักหมุดตามพิกัดตรงกับรูปถ่าย
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -674,6 +669,7 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
+        /* ปรับแต่งกล่องป้าย overlay บนภาพแผนที่ดาวเทียมให้คมชัด สวยงาม */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
@@ -1096,7 +1092,7 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* Section 3: แสดงผลเฉพาะปุ่มเลือกรูปถ่ายสถานที่ ซ่อนส่วนแผนที่พรีวิว GPS ทั้งหมด */}
+              {/* Section 3: แสดงเฉพาะการเลือกไฟล์รูปถ่ายสถานที่ */}
               <div>
                 <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4">
                   <Image className="w-5 h-5 text-amber-800" />
@@ -1109,7 +1105,6 @@ export default function SurinCourtWarrantApp() {
                     <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
                   </div>
 
-                  {/* ปุ่มเลือกอัปโหลดไฟล์ภาพจากคลังอัลบั้มในมือถือ/คอมพิวเตอร์ */}
                   <label className="w-full max-w-md mx-auto bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
                     <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่
                     <input 
@@ -1792,6 +1787,7 @@ export default function SurinCourtWarrantApp() {
                     พิกัด GPS: {formData.gps || "14.872185, 103.461160"}
                   </div>
 
+                  {/* ภาพแผนที่ดาวเทียม Yandex แสดงกล่องข้อมูลพิกัด ตำบล อำเภอ จังหวัด วันที่ และเวลา ตามข้อมูลในฟอร์มตรงเป๊ะ */}
                   <div className="w-full rounded-lg overflow-hidden h-64 relative bg-white">
                     <img 
                       src={getMapImageUrl(formData.gps)} 
@@ -1808,7 +1804,7 @@ export default function SurinCourtWarrantApp() {
                     
                     <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
                       <div>GPS: {formData.gps || "14.872186, 103.461157"}</div>
-                      <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || 'สมุด'} อำเภอ {formData.district || 'ปราสาท'}</div>
+                      <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || 'ไพล'} อำเภอ {formData.district || 'ปราสาท'}</div>
                       <div>จังหวัด {formData.province || 'สุรินทร์'} {formData.zipcode || '32140'}</div>
                       <div>วันที่ {formatThaiDate(formData.sendDate)} เวลา {formData.sendTime || getCurrentTimeStr()} น.</div>
                     </div>
@@ -1903,7 +1899,7 @@ export default function SurinCourtWarrantApp() {
                         
                         <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
                           <div>GPS: {item.gps || "14.872186, 103.461157"}</div>
-                          <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || 'สมุด'} อำเภอ {item.district || 'ปราสาท'}</div>
+                          <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || 'ไพล'} อำเภอ {item.district || 'ปราสาท'}</div>
                           <div>จังหวัด {item.province || 'สุรินทร์'} {item.zipcode || '32140'}</div>
                           <div>วันที่ {formatThaiDate(item.sendDate)} เวลา {item.sendTime || getCurrentTimeStr()} น.</div>
                         </div>
