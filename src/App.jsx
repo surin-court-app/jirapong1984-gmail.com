@@ -378,14 +378,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  const handleDeleteAllRecords = async () => {
-    if (window.confirm(`คำเตือน! ลบรายการคดีทั้งหมดในบัญชีของ "${currentUser?.fullName}" ใช่หรือไม่?`)) {
-      await fetch(`${API_URL}/warrants/owner/${currentUser.username}`, { method: 'DELETE' });
-      fetchUserWarrants(currentUser.username);
-      addAuditLog('DELETE_ALL_RECORDS', `ลบรายการคดีทั้งหมดในบัญชี`);
-    }
-  };
-
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) {
       alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
@@ -418,7 +410,7 @@ export default function SurinCourtWarrantApp() {
         <meta charset='utf-8'>
         <title>บันทึกการปิดหมาย</title>
         <style>
-          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 2.5rem; }
+          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 1.5rem; }
           .center { text-align: center; }
           .right { text-align: right; }
           .bold { font-weight: bold; }
@@ -769,16 +761,6 @@ export default function SurinCourtWarrantApp() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {currentRecords.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteAllRecords}
-                      className="bg-red-700 hover:bg-red-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
-                    >
-                      <Trash2 className="w-4 h-4" /> ลบทั้งหมด ({currentRecords.length})
-                    </button>
-                  )}
-
                   <button
                     type="button"
                     onClick={() => { setExcelFilterStatus('completed'); setSearchQuery(''); }}
@@ -845,15 +827,20 @@ export default function SurinCourtWarrantApp() {
                     >
                       <Clock className="w-3.5 h-3.5" /> รอดำเนินการ ({pendingRecords.length})
                     </button>
+                    
+                    {/* ปรับปรุงปุ่มรายงานแล้ว ให้เปิดป๊อปอัป คลังโฟลเดอร์ย้อนหลัง เมื่อคลิก */}
                     <button
                       type="button"
-                      onClick={() => setExcelFilterStatus('completed')}
-                      className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition ${
-                        excelFilterStatus === 'completed' || searchQuery ? 'bg-emerald-700 text-white shadow' : 'text-emerald-900 hover:bg-emerald-200/60'
-                      }`}
-                      title="แสดงเฉพาะหมายที่บันทึกรายงานผลในวันนี้"
+                      onClick={() => {
+                        setShowArchiveModal(true);
+                        setSelectedYear(null);
+                        setSelectedMonth(null);
+                        setSelectedDate(null);
+                      }}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-md font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
+                      title="คลิกเพื่อเปิดดูคลังโฟลเดอร์ย้อนหลังและรายงานผลทั้งหมด"
                     >
-                      <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({todayCompletedRecords.length})
+                      <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({allCompletedRecords.length})
                     </button>
                   </div>
                 )}
