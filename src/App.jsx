@@ -379,21 +379,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const gpsStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-        setFormData(prev => ({ ...prev, gps: gpsStr }));
-        addAuditLog('FETCH_GPS', `ดึงพิกัด GPS: ${gpsStr}`);
-        alert(`ดึงพิกัด GPS เรียบร้อย: ${gpsStr}`);
-      });
-    } else {
-      alert("เบราว์เซอร์นี้ไม่รองรับการดึง GPS");
-    }
-  };
-
   // แผนที่ดาวเทียม Yandex ที่ระดับ Zoom 14 สัดส่วน 600x280 คมชัด ไม่แตก
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
@@ -1095,93 +1080,63 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* Section 3 */}
+              {/* Section 3: แสดงผลเฉพาะปุ่มเลือกรูปถ่ายสถานที่ ซ่อนส่วนแผนที่พรีวิว GPS ทั้งหมด */}
               <div>
                 <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4">
-                  <MapPin className="w-5 h-5 text-amber-800" />
-                  <span>3. หลักฐานการส่งหมาย และพิกัด GPS</span>
+                  <Image className="w-5 h-5 text-amber-800" />
+                  <span>3. หลักฐานรูปถ่ายสถานที่ส่งหมาย</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-5 bg-yellow-50 border border-yellow-200 rounded-xl flex flex-col justify-between shadow-sm space-y-3">
-                    <div className="text-center">
-                      <span className="font-bold text-base text-gray-800 block">พิกัด GPS นำส่ง</span>
-                      <span className="text-xs text-gray-500">กดปุ่มดึงพิกัดเพื่อนำเข้าพิกัดตำแหน่งปัจจุบัน</span>
-                    </div>
-
-                    <button type="button" onClick={handleGetLocation} className="w-full bg-gray-900 hover:bg-gray-800 text-yellow-400 py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow transition">
-                      <MapPin className="w-4 h-4" /> ดึงพิกัด GPS ปัจจุบัน
-                    </button>
-
-                    <div className="border border-yellow-300 rounded-lg overflow-hidden bg-white shadow-xs">
-                      <div className="bg-yellow-100/80 px-3 py-1 text-[11px] font-bold text-amber-900 flex justify-between items-center">
-                        <span>ภาพพรีวิวแผนที่ดาวเทียม GPS</span>
-                      </div>
-                      <img 
-                        src={getMapImageUrl(formData.gps)} 
-                        alt="ภาพพรีวิวแผนที่ GPS" 
-                        className="w-full h-32 object-cover block" 
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                          const lat = parseFloat(cleanGps[0]) || 14.872185;
-                          const lng = parseFloat(cleanGps[1]) || 103.461160;
-                          e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
-                        }}
-                      />
-                    </div>
+                <div className="p-5 bg-gray-50 border border-gray-200 rounded-xl flex flex-col justify-between shadow-sm space-y-4">
+                  <div className="text-center">
+                    <span className="font-bold text-base text-gray-800 block">ภาพถ่ายสถานที่ส่ง</span>
+                    <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
                   </div>
 
-                  <div className="p-5 bg-gray-50 border border-gray-200 rounded-xl flex flex-col justify-between shadow-sm">
-                    <div className="text-center mb-3">
-                      <span className="font-bold text-base text-gray-800 block">ภาพถ่ายสถานที่ส่ง</span>
-                      <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
-                    </div>
+                  {/* ปุ่มเลือกอัปโหลดไฟล์ภาพจากคลังอัลบั้มในมือถือ/คอมพิวเตอร์ */}
+                  <label className="w-full max-w-md mx-auto bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
+                    <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageChange} 
+                      className="hidden" 
+                      multiple 
+                    />
+                  </label>
 
-                    <label className="w-full bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
-                      <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleImageChange} 
-                        className="hidden" 
-                        multiple 
-                      />
-                    </label>
-
-                    {formData.photos.length > 0 ? (
-                      <div className="mt-4 space-y-2">
-                        <div className="flex justify-between items-center text-xs text-gray-600 font-bold">
-                          <span>รูปถ่ายที่เลือกแล้ว ({formData.photos.length} รูป):</span>
-                          <button 
-                            type="button" 
-                            onClick={() => setFormData(prev => ({ ...prev, photos: [] }))} 
-                            className="text-red-500 hover:underline text-[10px]"
-                          >
-                            ล้างทั้งหมด
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto p-1 bg-white border border-gray-200 rounded-lg">
-                          {formData.photos.map((imgUrl, idx) => (
-                            <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-300 aspect-square">
-                              <img src={imgUrl} alt={`สถานที่ส่ง ${idx + 1}`} className="w-full h-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => handleRemovePhoto(idx)}
-                                className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition"
-                                title="ลบรูปนี้"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
+                  {formData.photos.length > 0 ? (
+                    <div className="mt-4 space-y-2">
+                      <div className="flex justify-between items-center text-xs text-gray-600 font-bold">
+                        <span>รูปถ่ายที่เลือกแล้ว ({formData.photos.length} รูป):</span>
+                        <button 
+                          type="button" 
+                          onClick={() => setFormData(prev => ({ ...prev, photos: [] }))} 
+                          className="text-red-500 hover:underline text-[10px]"
+                        >
+                          ล้างทั้งหมด
+                        </button>
                       </div>
-                    ) : (
-                      <span className="mt-3 text-xs text-gray-400 text-center block">ยังไม่ได้เลือกรูปถ่าย</span>
-                    )}
-                  </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-48 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                        {formData.photos.map((imgUrl, idx) => (
+                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-300 aspect-square">
+                            <img src={imgUrl} alt={`สถานที่ส่ง ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePhoto(idx)}
+                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition"
+                              title="ลบรูปนี้"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="mt-3 text-xs text-gray-400 text-center block">ยังไม่ได้เลือกรูปถ่าย</span>
+                  )}
                 </div>
               </div>
 
