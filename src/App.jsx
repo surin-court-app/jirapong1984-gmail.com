@@ -69,7 +69,7 @@ export default function SurinCourtWarrantApp() {
     warrantType: '', targetName: '', 
     sendDate: todayStr, 
     sendTime: getCurrentTimeStr(),
-    address: '', village: '', subdistrict: '', district: '', province: 'สุรินทร์', zipcode: '32000', warrantResult: 'ส่งได้โดยวิธีปิดหมาย', price: '', gps: '', photos: []
+    address: '', subdistrict: '', district: '', province: 'สุรินทร์', zipcode: '32000', warrantResult: 'ส่งได้โดยวิธีปิดหมาย', price: '', gps: '', photos: []
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -289,7 +289,6 @@ export default function SurinCourtWarrantApp() {
                 warrantType: row[5] ? String(row[5]).trim() : '',
                 targetName: targetName,
                 address: row[7] ? String(row[7]).trim() : '',
-                village: row[10] ? String(row[10]).trim() : '',
                 subdistrict: row[8] ? String(row[8]).trim() : '',
                 district: row[11] ? String(row[11]).trim() : '',
                 province: row[12] ? String(row[12]).trim() : 'สุรินทร์',
@@ -335,7 +334,6 @@ export default function SurinCourtWarrantApp() {
       sendDate: item.sendDate || todayStr,
       sendTime: item.sendTime || getCurrentTimeStr(),
       address: item.address || '',
-      village: item.village || '',
       subdistrict: item.subdistrict || '',
       district: item.district || '',
       province: item.province || 'สุรินทร์',
@@ -427,10 +425,10 @@ export default function SurinCourtWarrantApp() {
           <div>คดีหมายเลขแดงที่ <span class="underline-dot">${formData.redNo || "........................"}</span></div>
         </div>
         <br/>
-        <div>เขียนที่ บ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ${formData.village || ''} ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span></div>
+        <div>เขียนที่ บ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span></div>
         <div>วันที่ <span class="underline-dot">${formatThaiDate(formData.sendDate)}</span></div>
         <br/>
-        <div>วันนี้เวลาประมาณ <span class="underline-dot">${formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span class="underline-dot">${formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span class="underline-dot">${formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ${formData.village || ''} ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
+        <div>วันนี้เวลาประมาณ <span class="underline-dot">${formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span class="underline-dot">${formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span class="underline-dot">${formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
         <br/>
         <div>ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span class="underline-dot">${formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
         <br/>
@@ -644,7 +642,7 @@ export default function SurinCourtWarrantApp() {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 1.4cm 1.0cm 0.3cm 1.0cm !important;
+            margin: 0.6cm 1.0cm 0.3cm 1.0cm !important;
           }
           html, body {
             height: auto !important;
@@ -665,7 +663,7 @@ export default function SurinCourtWarrantApp() {
             display: block !important;
             width: 100% !important;
             margin: 0 !important;
-            padding-top: 1.5rem !important;
+            padding-top: 0.8rem !important;
             border: none !important;
           }
           .page-single {
@@ -942,20 +940,8 @@ export default function SurinCourtWarrantApp() {
                     <textarea rows="2" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น 127 ม. 5 ซ. - ถ. -"></textarea>
                   </div>
 
-                  {/* ช่องกรอกข้อความทั่วไป ไม่ใช้ Dropdown */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 md:col-span-3">
-                    {/* หมู่ที่ / ชื่อหมู่บ้าน */}
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">หมู่ที่ / ชื่อหมู่บ้าน</label>
-                      <input
-                        type="text"
-                        value={formData.village || ''}
-                        onChange={(e) => setFormData({ ...formData, village: e.target.value })}
-                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-medium text-xs"
-                        placeholder="เช่น หมู่ 5"
-                      />
-                    </div>
-
+                  {/* ปรับแก้ช่องกรอกข้อความที่อยู่ แบ่งเต็ม 4 คอลัมน์ (อำเภอ, ตำบล, จังหวัด, รหัสไปรษณีย์) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 md:col-span-3">
                     {/* อำเภอ */}
                     <div>
                       <label className="block text-xs font-bold text-gray-600 uppercase mb-1">อำเภอ</label>
@@ -1290,7 +1276,7 @@ export default function SurinCourtWarrantApp() {
                               หมายถึง: <strong className="text-slate-900">{rec.targetName || '-'}</strong> | ประเภท: {rec.warrantType || '-'}
                             </div>
                             <div className="text-xs text-slate-500">
-                              ที่อยู่: {rec.address} {rec.village} {rec.subdistrict} {rec.district} {rec.province}
+                              ที่อยู่: {rec.address} {rec.subdistrict} {rec.district} {rec.province}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1685,7 +1671,7 @@ export default function SurinCourtWarrantApp() {
 
                 <div className="space-y-0.5 text-justify pt-0.5">
                   <div>
-                    เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> {formData.village ? <span>{formData.village}</span> : ''} ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span>
+                    เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span>
                   </div>
 
                   <div>
@@ -1693,7 +1679,7 @@ export default function SurinCourtWarrantApp() {
                   </div>
 
                   <div>
-                    วันนี้เวลาประมาณ <span className="dot-underline font-bold">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> {formData.village ? <span>{formData.village}</span> : ''} ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                    วันนี้เวลาประมาณ <span className="dot-underline font-bold">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
                   </div>
 
                   <div>
@@ -1765,7 +1751,7 @@ export default function SurinCourtWarrantApp() {
 
                     <div className="space-y-0.5 text-justify pt-0.5">
                       <div>
-                        เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> {item.village ? <span>{item.village}</span> : ''} ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span>
+                        เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span>
                       </div>
 
                       <div>
@@ -1773,7 +1759,7 @@ export default function SurinCourtWarrantApp() {
                       </div>
 
                       <div>
-                        วันนี้เวลาประมาณ <span className="dot-underline font-bold">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{item.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> {item.village ? <span>{item.village}</span> : ''} ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                        วันนี้เวลาประมาณ <span className="dot-underline font-bold">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{item.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
                       </div>
 
                       <div>
