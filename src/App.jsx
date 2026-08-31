@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown } from 'lucide-react';
+import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image } from 'lucide-react';
 
+// ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
 export default function SurinCourtWarrantApp() {
@@ -26,6 +27,7 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
+  // ดึงข้อมูลผู้ใช้งานที่เคยล็อกอินค้างไว้จาก localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('srnc_court_user');
@@ -56,6 +58,7 @@ export default function SurinCourtWarrantApp() {
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
 
+  // State สำหรับคลังโฟลเดอร์ย้อนหลัง
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -166,6 +169,7 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
+  // แปลงพิกัด EXIF GPS (DMS) เป็น Decimal Degrees
   const convertDMSToDD = (degrees, minutes, seconds, direction) => {
     let dd = degrees + (minutes / 60) + (seconds / 3600);
     if (direction === "S" || direction === "W") {
@@ -174,6 +178,7 @@ export default function SurinCourtWarrantApp() {
     return dd;
   };
 
+  // เลือกอัปโหลดไฟล์ภาพรองรับทั้ง iOS และ Android
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -196,8 +201,9 @@ export default function SurinCourtWarrantApp() {
           photos: [...prev.photos, resultImgUrl]
         }));
 
+        // ตรวจสอบข้อมูล EXIF GPS เพื่ออัปเดตลงฟอร์ม
         if (window.EXIF) {
-          const imgElement = new Image();
+          const imgElement = new window.Image();
           imgElement.onload = () => {
             window.EXIF.getData(imgElement, function() {
               const latData = window.EXIF.getTag(this, "GPSLatitude");
@@ -383,7 +389,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // แผนที่ดาวเทียม Yandex ที่ระดับ Zoom 14 คมชัด ไม่แตก และปรับเปลี่ยนตามค่าพิกัดใน formData.gps
+  // แผนที่ดาวเทียม Yandex ที่ระดับ Zoom 14 สัดส่วน 600x280 คมชัด ไม่แตก
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -401,6 +407,7 @@ export default function SurinCourtWarrantApp() {
     return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
   };
 
+  // ฟังก์ชันดาวน์โหลดเอกสาร Microsoft Word (.doc)
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) {
       alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
@@ -1135,13 +1142,12 @@ export default function SurinCourtWarrantApp() {
                       <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
                     </div>
 
-                    {/* ปุ่มถ่ายภาพ/เลือกภาพที่รองรับการถ่ายจากกล้องโทรศัพท์โดยตรง */}
+                    {/* ปุ่มเลือกอัปโหลดไฟล์ภาพจากคลังอัลบั้มเท่านั้น (เอา capture="environment" ออก) */}
                     <label className="w-full bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
-                      <Camera className="w-4 h-4" /> ถ่ายภาพ / เลือกรูปถ่าย
+                      <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่
                       <input 
                         type="file" 
                         accept="image/*" 
-                        capture="environment"
                         onChange={handleImageChange} 
                         className="hidden" 
                         multiple 
