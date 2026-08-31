@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image } from 'lucide-react';
+import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
@@ -25,6 +25,10 @@ export default function SurinCourtWarrantApp() {
 
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+
+  // State สำหรับจัดการและกรอง Audit Log
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [selectedUserFilter, setSelectedUserFilter] = useState('ALL');
 
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -549,6 +553,39 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ฟังก์ชันดาวน์โหลด Audit Log เป็นไฟล์ CSV (Excel)
+  const handleExportAuditLogsCSV = () => {
+    if (filteredAuditLogs.length === 0) return alert("ไม่มีข้อมูล Log ที่จะส่งออก");
+    
+    let csvContent = "\uFEFFเวลา,ผู้ใช้งาน,Username,กิจกรรม (Action),รายละเอียด\n";
+    filteredAuditLogs.forEach(log => {
+      const safeDetails = `"${(log.details || '').replace(/"/g, '""')}"`;
+      csvContent += `${log.timestamp},${log.fullName},${log.username},${log.action},${safeDetails}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Audit_Logs_Report_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // ฟังก์ชันลบ Audit Log เก่าที่เกิน 30 วัน
+  const handleClearOldLogs = async () => {
+    if (window.confirm("คุณต้องการลบประวัติการใช้งาน (Audit Logs) ที่เก่ากว่า 30 วันใช่หรือไม่?")) {
+      try {
+        await fetch(`${API_URL}/audit-logs/clear-old`, { method: 'DELETE' });
+        fetchAuditLogs();
+        alert("ลบประวัติการใช้งานเก่าเรียบร้อยแล้ว");
+      } catch (e) {
+        alert("ไม่สามารถลบข้อมูล Log ได้");
+      }
+    }
+  };
+
   const getGroupedArchive = () => {
     const archive = {};
     const monthNames = [
@@ -598,6 +635,19 @@ export default function SurinCourtWarrantApp() {
     );
   }
 
+  // คำนวณ Log ที่กรองแล้ว
+  const filteredAuditLogs = auditLogs.filter(log => {
+    const matchesUser = selectedUserFilter === 'ALL' || log.username === selectedUserFilter;
+    const q = logSearchQuery.toLowerCase().trim();
+    const matchesQuery = q === '' ||
+      (log.fullName && log.fullName.toLowerCase().includes(q)) ||
+      (log.username && log.username.toLowerCase().includes(q)) ||
+      (log.action && log.action.toLowerCase().includes(q)) ||
+      (log.details && log.details.toLowerCase().includes(q));
+    
+    return matchesUser && matchesQuery;
+  });
+
   const recordsToBatchPrint = selectedPrintDate === 'ALL'
     ? allCompletedRecords
     : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
@@ -639,7 +689,6 @@ export default function SurinCourtWarrantApp() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=TH+SarabunPSK:ital,wght@0,400;0,700;1,400;1,700&display=swap');
         
-        /* ปรับใช้ฟอนต์ TH SarabunPSK ขนาด 16pt ในรายงานพิมพ์ */
         .sarabun-font {
           font-family: 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif !important;
           font-size: 16pt !important;
@@ -1395,13 +1444,68 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* TAB 2: AUDIT LOG (เฉพาะ ADMIN) */}
+        {/* TAB 2: AUDIT LOG (เฉพาะ ADMIN) - อัปเกรดระบบค้นหา/กรอง/ดาวน์โหลด */}
         {activeTab === 'auditLogs' && currentUser?.role === 'admin' && (
           <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-6 no-print">
-            <div className="flex justify-between items-center border-b border-gray-200 pb-3">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-gray-200 pb-3">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <FileSearch className="w-5 h-5 text-amber-800" /> บันทึกประวัติการใช้งานระบบ (Audit Logs)
               </h2>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportAuditLogsCSV}
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                  title="ส่งออกประวัติเป็นไฟล์ Excel / CSV"
+                >
+                  <Download className="w-4 h-4" /> ดาวน์โหลด Excel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearOldLogs}
+                  className="bg-red-700 hover:bg-red-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                  title="ลบ Log เก่าที่เกิน 30 วันเพื่อประหยัดพื้นที่"
+                >
+                  <Trash2 className="w-4 h-4" /> ลบ Log เก่า (> 30 วัน)
+                </button>
+              </div>
+            </div>
+
+            {/* แถบค้นหาและตัวกรองผู้ใช้งาน */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs">
+              <div className="md:col-span-2 relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={logSearchQuery}
+                  onChange={(e) => setLogSearchQuery(e.target.value)}
+                  placeholder="ค้นหาชื่อผู้ใช้, กิจกรรม (Action), หรือรายละเอียดคดี..."
+                  className="w-full pl-9 pr-8 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                />
+                {logSearchQuery && (
+                  <button onClick={() => setLogSearchQuery('')} className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-amber-800 flex-shrink-0" />
+                <select
+                  value={selectedUserFilter}
+                  onChange={(e) => setSelectedUserFilter(e.target.value)}
+                  className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 font-bold focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                >
+                  <option value="ALL">-- แสดงผู้ใช้งานทั้งหมด --</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.username}>
+                      {u.fullName} ({u.username})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm max-h-96 overflow-y-auto">
@@ -1415,8 +1519,8 @@ export default function SurinCourtWarrantApp() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 font-mono">
-                  {auditLogs.length > 0 ? (
-                    auditLogs.map((log) => (
+                  {filteredAuditLogs.length > 0 ? (
+                    filteredAuditLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50 transition">
                         <td className="p-3 text-gray-500 whitespace-nowrap">{log.timestamp}</td>
                         <td className="p-3 font-bold text-amber-900 whitespace-nowrap">{log.fullName} ({log.username})</td>
@@ -1426,7 +1530,7 @@ export default function SurinCourtWarrantApp() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="4" className="p-6 text-center text-gray-400 italic">ยังไม่มีข้อมูลประวัติ Audit Log</td>
+                      <td colSpan="4" className="p-6 text-center text-gray-400 italic">ไม่พบประวัติการใช้งานตามเงื่อนไขที่ค้นหา</td>
                     </tr>
                   )}
                 </tbody>
