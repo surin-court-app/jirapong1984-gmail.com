@@ -52,6 +52,9 @@ export default function SurinCourtWarrantApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentRecords, setCurrentRecords] = useState([]);
 
+  // State สำหรับเก็บ Batch ID/Import Time ล่าสุดของเซสชันปัจจุบัน
+  const [currentBatchId, setCurrentBatchId] = useState(null);
+
   const [editingUserId, setEditingUserId] = useState(null);
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
@@ -149,7 +152,10 @@ export default function SurinCourtWarrantApp() {
     };
   }, [isLoggedIn, currentUser]);
 
+  // รีเซ็ตการกรอกข้อมูลและรีเซ็ต Batch ID เมื่อกดปุ่มกรอกข้อมูลเอง
   const handleClearFormForManualInput = () => {
+    const newManualBatchId = `manual_${Date.now()}`;
+    setCurrentBatchId(newManualBatchId);
     setFormData({
       ...initialFormState,
       selectedRecordId: `manual_${currentUser?.username || 'user'}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -256,6 +262,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // เมื่อเลือกอัปโหลดไฟล์ Excel ใหม่ จะสร้าง newBatchId เพื่อแยกชุดข้อมูล
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser) return;
@@ -270,6 +277,7 @@ export default function SurinCourtWarrantApp() {
 
           const parsedRecords = [];
           const nowStamp = Date.now();
+          const newBatchId = `batch_${nowStamp}`;
 
           data.forEach((row, idx) => {
             if (row && (row[1] || row[6])) {
@@ -283,6 +291,7 @@ export default function SurinCourtWarrantApp() {
 
               parsedRecords.push({
                 id: uniqueId,
+                batchId: newBatchId, // ระบุ ID ชุดไฟล์ Excel
                 ownerUsername: currentUser.username,
                 blackNo: blackNo,
                 redNo: row[2] ? String(row[2]).trim() : '',
@@ -308,6 +317,8 @@ export default function SurinCourtWarrantApp() {
             alert("ไม่พบข้อมูลจำเลยในไฟล์ Excel");
             return;
           }
+
+          setCurrentBatchId(newBatchId); // ตั้งค่า Batch ID ปัจจุบันเป็นของไฟล์นี้
 
           await fetch(`${API_URL}/warrants/batch`, {
             method: 'POST',
@@ -571,10 +582,15 @@ export default function SurinCourtWarrantApp() {
   const archivedData = getGroupedArchive();
 
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
-  const todayCompletedRecords = currentRecords.filter(r => r.isSaved && r.sendDate === todayStr);
+
+  // คำนวณจำนวนคดีที่ "รายงานแล้ว" เฉพาะของ Batch ปัจจุบันที่อัปโหลด/กรอก
+  const currentBatchCompletedRecords = currentBatchId 
+    ? currentRecords.filter(r => r.isSaved && r.batchId === currentBatchId)
+    : currentRecords.filter(r => r.isSaved && r.sendDate === todayStr);
+
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
-  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : todayCompletedRecords;
+  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : currentBatchCompletedRecords;
   
   if (searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase().trim();
@@ -817,6 +833,7 @@ export default function SurinCourtWarrantApp() {
                       <Clock className="w-3.5 h-3.5" /> รอดำเนินการ ({pendingRecords.length})
                     </button>
                     
+                    {/* ปุ่ม รายงานแล้ว แสดงตัวเลขเฉพาะของ Batch ปัจจุบัน (ตั้งต้นที่ 0 เมื่อเลือกไฟล์ใหม่หรือกดล้างฟอร์ม) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -828,7 +845,7 @@ export default function SurinCourtWarrantApp() {
                       className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-md font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
                       title="คลิกเพื่อเปิดดูคลังโฟลเดอร์ย้อนหลังและรายงานผลทั้งหมด"
                     >
-                      <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({allCompletedRecords.length})
+                      <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({currentBatchCompletedRecords.length})
                     </button>
                   </div>
                 )}
@@ -940,7 +957,6 @@ export default function SurinCourtWarrantApp() {
                     <textarea rows="2" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น 127 ม. 5 ซ. - ถ. -"></textarea>
                   </div>
 
-                  {/* ปรับแก้ช่องกรอกข้อความที่อยู่ แบ่งเต็ม 4 คอลัมน์ (อำเภอ, ตำบล, จังหวัด, รหัสไปรษณีย์) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 md:col-span-3">
                     {/* อำเภอ */}
                     <div>
