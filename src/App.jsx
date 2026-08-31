@@ -26,7 +26,6 @@ export default function SurinCourtWarrantApp() {
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // State สำหรับจัดการและกรอง Audit Log
   const [logSearchQuery, setLogSearchQuery] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState('ALL');
 
@@ -171,7 +170,13 @@ export default function SurinCourtWarrantApp() {
     if (!dateString) return "....................";
     const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
     const parts = dateString.split('-');
-    return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
+    if (parts.length === 3) {
+      const day = parseInt(parts[2], 10);
+      const month = thaiMonths[parseInt(parts[1], 10) - 1];
+      const yearBE = parseInt(parts[0], 10) + 543;
+      return `${day} ${month} ${yearBE}`;
+    }
+    return dateString;
   };
 
   const compressImage = (file, maxWidth = 1600, maxHeight = 1600, quality = 0.85) => {
@@ -420,7 +425,14 @@ export default function SurinCourtWarrantApp() {
         <meta charset='utf-8'>
         <title>บันทึกการปิดหมาย</title>
         <style>
-          body { font-family: 'TH SarabunPSK', 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 1.5rem; }
+          body { 
+            font-family: 'TH SarabunPSK', 'TH Sarabun New', Sarabun, sans-serif; 
+            font-size: 16pt; 
+            line-height: 1.2; 
+            margin-top: 1.5rem;
+            font-variant-numeric: lining-nums proportional-nums;
+            font-feature-settings: "thai" 0, "tnum" 1;
+          }
           .center { text-align: center; }
           .right { text-align: right; }
           .bold { font-weight: bold; }
@@ -553,7 +565,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ฟังก์ชันดาวน์โหลด Audit Log เป็นไฟล์ CSV (Excel)
   const handleExportAuditLogsCSV = () => {
     if (filteredAuditLogs.length === 0) return alert("ไม่มีข้อมูล Log ที่จะส่งออก");
     
@@ -573,7 +584,6 @@ export default function SurinCourtWarrantApp() {
     document.body.removeChild(link);
   };
 
-  // ฟังก์ชันลบ Audit Log เก่าที่เกิน 30 วัน
   const handleClearOldLogs = async () => {
     if (window.confirm("คุณต้องการลบประวัติการใช้งาน (Audit Logs) ที่เก่ากว่า 30 วันใช่หรือไม่?")) {
       try {
@@ -635,7 +645,6 @@ export default function SurinCourtWarrantApp() {
     );
   }
 
-  // คำนวณ Log ที่กรองแล้ว
   const filteredAuditLogs = auditLogs.filter(log => {
     const matchesUser = selectedUserFilter === 'ALL' || log.username === selectedUserFilter;
     const q = logSearchQuery.toLowerCase().trim();
@@ -689,10 +698,13 @@ export default function SurinCourtWarrantApp() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=TH+SarabunPSK:ital,wght@0,400;0,700;1,400;1,700&display=swap');
         
+        /* สั่งบังคับให้ฟอนต์ TH SarabunPSK แสดงผลตัวเลขอารบิก ไม่แปลงเป็นเลขไทย */
         .sarabun-font {
           font-family: 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif !important;
           font-size: 16pt !important;
           line-height: 1.15 !important;
+          font-variant-numeric: lining-nums proportional-nums !important;
+          font-feature-settings: "thai" 0, "tnum" 1 !important;
         }
 
         .dot-underline {
@@ -717,6 +729,8 @@ export default function SurinCourtWarrantApp() {
             border-left: none !important;
             box-shadow: none !important;
             outline: none !important;
+            font-variant-numeric: lining-nums proportional-nums !important;
+            font-feature-settings: "thai" 0, "tnum" 1 !important;
           }
           .no-print {
             display: none !important;
@@ -727,6 +741,8 @@ export default function SurinCourtWarrantApp() {
             margin: 0 !important;
             padding-top: 0.8rem !important;
             border: none !important;
+            font-variant-numeric: lining-nums proportional-nums !important;
+            font-feature-settings: "thai" 0, "tnum" 1 !important;
           }
           .page-single {
             page-break-after: avoid !important;
@@ -1082,7 +1098,7 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* Section 3: แสดงเฉพาะการเลือกไฟล์รูปถ่ายสถานที่ */}
+              {/* Section 3 */}
               <div>
                 <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4">
                   <Image className="w-5 h-5 text-amber-800" />
@@ -1191,7 +1207,7 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* Modal คลังโฟลเดอร์ย้อนหลัง (แยกตามวัน/เดือน/ปี) */}
+        {/* Modal คลังโฟลเดอร์ย้อนหลัง */}
         {showArchiveModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 no-print">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] border border-amber-300">
@@ -1341,7 +1357,6 @@ export default function SurinCourtWarrantApp() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {/* ปุ่มเรียกดู/แก้ไข */}
                             <button
                               type="button"
                               onClick={() => {
@@ -1353,7 +1368,6 @@ export default function SurinCourtWarrantApp() {
                               เรียกดู/แก้ไข <ArrowRight className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* ปุ่มลบรายการ */}
                             <button
                               type="button"
                               onClick={() => handleDeleteWarrantRecord(rec.id, rec.blackNo, rec.targetName)}
@@ -1444,7 +1458,7 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* TAB 2: AUDIT LOG (เฉพาะ ADMIN) - อัปเกรดระบบค้นหา/กรอง/ดาวน์โหลด */}
+        {/* TAB 2: AUDIT LOG */}
         {activeTab === 'auditLogs' && currentUser?.role === 'admin' && (
           <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-6 no-print">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-gray-200 pb-3">
@@ -1473,7 +1487,6 @@ export default function SurinCourtWarrantApp() {
               </div>
             </div>
 
-            {/* แถบค้นหาและตัวกรองผู้ใช้งาน */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs">
               <div className="md:col-span-2 relative">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
@@ -1539,7 +1552,7 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* TAB 3: USER MANAGEMENT (เฉพาะ ADMIN) */}
+        {/* TAB 3: USER MANAGEMENT */}
         {activeTab === 'userManagement' && currentUser?.role === 'admin' && (
           <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-8 no-print">
             <div className="border border-amber-200 bg-amber-50/40 p-6 rounded-xl">
@@ -1767,7 +1780,7 @@ export default function SurinCourtWarrantApp() {
         )}
 
         {/* ==========================================
-            แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 สมบูรณ์
+            แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 สมบูรณ์ (บังคับตัวเลขอารบิก)
             ========================================== */}
         <div className="print-area hidden sarabun-font bg-white text-black max-w-2xl mx-auto">
           {printMode === 'single' && (
