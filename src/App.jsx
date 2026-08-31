@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image } from 'lucide-react';
 
-// ใช้ Relative Path เพื่อเชื่อมต่อไปยัง Express บน Server เดียวกันโดยอัตโนมัติ
 const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
 export default function SurinCourtWarrantApp() {
@@ -167,7 +166,6 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  // ฟังก์ชันย่อขนาดภาพ (Resize & Compress) ฝั่ง Client ให้ไฟล์ขนาดเล็กลง โหลดเร็วขึ้น
   const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -204,7 +202,6 @@ export default function SurinCourtWarrantApp() {
     });
   };
 
-  // ปรับการรับไฟล์รูปถ่ายให้ผ่านการบีบอัดขนาดภาพก่อนบันทึกเข้า State
   const handleImageChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -221,20 +218,23 @@ export default function SurinCourtWarrantApp() {
     const uploadDateStr = uploadNow.toISOString().split('T')[0];
     const uploadTimeStr = `${String(uploadNow.getHours()).padStart(2, '0')}:${String(uploadNow.getMinutes()).padStart(2, '0')}`;
 
+    const newPhotos = [];
     for (const file of validFiles) {
       try {
-        // ย่อขนาดไฟล์ให้เล็กกระทัดรัด (ประมาณ 150KB - 300KB)
         const compressedBase64 = await compressImage(file);
-
-        setFormData((prev) => ({
-          ...prev,
-          photos: [...prev.photos, compressedBase64],
-          sendDate: uploadDateStr,
-          sendTime: uploadTimeStr
-        }));
+        newPhotos.push(compressedBase64);
       } catch (err) {
         console.error("เกิดข้อผิดพลาดในการย่อขนาดภาพ:", err);
       }
+    }
+
+    if (newPhotos.length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        photos: [...prev.photos, ...newPhotos],
+        sendDate: uploadDateStr,
+        sendTime: uploadTimeStr
+      }));
     }
   };
 
@@ -394,6 +394,24 @@ export default function SurinCourtWarrantApp() {
 
     addAuditLog('DOWNLOAD_WORD', `ดาวน์โหลดเอกสาร Word คดีดำ: ${formData.blackNo} ถึง: ${formData.targetName}`);
 
+    let photosHtml = '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
+    if (formData.photos.length === 1) {
+      photosHtml = `<img src="${formData.photos[0]}" width="550"/>`;
+    } else if (formData.photos.length > 1) {
+      let rowsHtml = '';
+      for (let i = 0; i < formData.photos.length; i += 2) {
+        const img1 = formData.photos[i];
+        const img2 = formData.photos[i + 1];
+        rowsHtml += `
+          <tr>
+            <td style="width: 50%; padding: 4px; text-align: center;"><img src="${img1}" width="270"/></td>
+            <td style="width: 50%; padding: 4px; text-align: center;">${img2 ? `<img src="${img2}" width="270"/>` : ''}</td>
+          </tr>
+        `;
+      }
+      photosHtml = `<table style="width: 100%; border-collapse: collapse;">${rowsHtml}</table>`;
+    }
+
     const htmlContent = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
@@ -435,9 +453,9 @@ export default function SurinCourtWarrantApp() {
         <br/>
         <div class="center bold">ลักษณะบ้าน <span class="underline-dot">${formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
         <br/>
-        <div class="center" style="margin-top: 25px;">
-          <div class="bold" style="font-size: 14pt; margin-bottom: 12px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
-          ${formData.photos.length > 0 ? `<img src="${formData.photos[0]}" width="580"/>` : '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>'}
+        <div class="center" style="margin-top: 20px;">
+          <div class="bold" style="font-size: 14pt; margin-bottom: 10px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
+          ${photosHtml}
         </div>
       </body>
       </html>
@@ -1040,7 +1058,7 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* Section 3: แสดงเฉพาะการเลือกไฟล์รูปถ่ายสถานที่ */}
+              {/* Section 3: แสดงการเลือกและจัดการไฟล์รูปถ่ายสถานที่ */}
               <div>
                 <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4">
                   <Image className="w-5 h-5 text-amber-800" />
@@ -1050,11 +1068,11 @@ export default function SurinCourtWarrantApp() {
                 <div className="p-5 bg-gray-50 border border-gray-200 rounded-xl flex flex-col justify-between shadow-sm space-y-4">
                   <div className="text-center">
                     <span className="font-bold text-base text-gray-800 block">ภาพถ่ายสถานที่ส่ง</span>
-                    <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
+                    <span className="text-xs text-gray-500">รองรับการเลือกอัปโหลดพร้อมกันหลายภาพ (หน้าบ้าน/ผู้รับหมาย)</span>
                   </div>
 
                   <label className="w-full max-w-md mx-auto bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
-                    <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่
+                    <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่ (อัปโหลดพร้อมกันได้หลายรูป)
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -1077,10 +1095,13 @@ export default function SurinCourtWarrantApp() {
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-48 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
                         {formData.photos.map((imgUrl, idx) => (
-                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-300 aspect-square">
+                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-300 aspect-square shadow-sm">
                             <img src={imgUrl} alt={`สถานที่ส่ง ${idx + 1}`} className="w-full h-full object-cover" />
+                            <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
+                              รูปที่ {idx + 1}
+                            </span>
                             <button
                               type="button"
                               onClick={() => handleRemovePhoto(idx)}
@@ -1720,16 +1741,29 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
+              {/* การแสดงผลรูปภาพในรายงาน PDF A4 (วนลูปเรนเดอร์รูปภาพทั้งหมดที่มีใน State) */}
               <div className="mt-1 space-y-1">
-                <div className="flex flex-col items-center justify-center space-y-1 w-full">
+                {formData.photos.length === 1 && (
                   <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
-                    {formData.photos.length > 0 ? (
-                      <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-80 object-contain mx-auto rounded-lg" />
-                    ) : (
-                      <div className="text-xs text-gray-400 font-bold w-full h-full flex items-center justify-center rounded-lg">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>
-                    )}
+                    <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-80 object-contain mx-auto rounded-lg" />
                   </div>
-                </div>
+                )}
+
+                {formData.photos.length > 1 && (
+                  <div className="grid grid-cols-2 gap-2 w-full max-h-80 overflow-hidden">
+                    {formData.photos.map((photo, pIdx) => (
+                      <div key={pIdx} className="w-full h-36 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
+                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-36 object-cover rounded-lg" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {formData.photos.length === 0 && (
+                  <div className="w-full h-36 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                    [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
+                  </div>
+                )}
               </div>
 
             </div>
@@ -1788,15 +1822,27 @@ export default function SurinCourtWarrantApp() {
                   </div>
 
                   <div className="mt-1 space-y-1">
-                    <div className="flex flex-col items-center justify-center space-y-1 w-full">
+                    {item.photos && item.photos.length === 1 && (
                       <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
-                        {item.photos && item.photos.length > 0 ? (
-                          <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-80 object-contain mx-auto rounded-lg" />
-                        ) : (
-                          <div className="text-xs text-gray-400 font-bold w-full h-full flex items-center justify-center rounded-lg">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>
-                        )}
+                        <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-80 object-contain mx-auto rounded-lg" />
                       </div>
-                    </div>
+                    )}
+
+                    {item.photos && item.photos.length > 1 && (
+                      <div className="grid grid-cols-2 gap-2 w-full max-h-80 overflow-hidden">
+                        {item.photos.map((photo, pIdx) => (
+                          <div key={pIdx} className="w-full h-36 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
+                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-36 object-cover rounded-lg" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {(!item.photos || item.photos.length === 0) && (
+                      <div className="w-full h-36 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                        [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
+                      </div>
+                    )}
                   </div>
 
                 </div>
