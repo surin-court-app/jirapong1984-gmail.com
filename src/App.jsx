@@ -763,15 +763,6 @@ export default function SurinCourtWarrantApp() {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => { setExcelFilterStatus('completed'); setSearchQuery(''); }}
-                    className="bg-purple-700 hover:bg-purple-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
-                    title="ดูประวัติหมายที่เคยบันทึกไว้ทั้งหมด"
-                  >
-                    <History className="w-4 h-4" /> ประวัติ/ค้นหารายงานย้อนหลัง
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => {
                       setShowArchiveModal(true);
                       setSelectedYear(null);
@@ -828,7 +819,6 @@ export default function SurinCourtWarrantApp() {
                       <Clock className="w-3.5 h-3.5" /> รอดำเนินการ ({pendingRecords.length})
                     </button>
                     
-                    {/* ปรับปรุงปุ่มรายงานแล้ว ให้เปิดป๊อปอัป คลังโฟลเดอร์ย้อนหลัง เมื่อคลิก */}
                     <button
                       type="button"
                       onClick={() => {
