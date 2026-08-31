@@ -418,7 +418,7 @@ export default function SurinCourtWarrantApp() {
         <meta charset='utf-8'>
         <title>บันทึกการปิดหมาย</title>
         <style>
-          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 1.0rem; }
+          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 2.5rem; }
           .center { text-align: center; }
           .right { text-align: right; }
           .bold { font-weight: bold; }
@@ -652,7 +652,7 @@ export default function SurinCourtWarrantApp() {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 0.1cm 1.0cm 0.3cm 1.0cm !important;
+            margin: 1.4cm 1.0cm 0.3cm 1.0cm !important;
           }
           html, body {
             height: auto !important;
@@ -673,8 +673,7 @@ export default function SurinCourtWarrantApp() {
             display: block !important;
             width: 100% !important;
             margin: 0 !important;
-            padding-top: 0rem !important;
-            margin-top: -1.2rem !important;
+            padding-top: 1.5rem !important;
             border: none !important;
           }
           .page-single {
