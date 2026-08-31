@@ -191,7 +191,6 @@ export default function SurinCourtWarrantApp() {
       return true;
     });
 
-    // ดึงวันที่ปัจจุบันที่ทำการอัปโหลดภาพ
     const uploadNow = new Date();
     const uploadDateStr = uploadNow.toISOString().split('T')[0];
     const uploadTimeStr = `${String(uploadNow.getHours()).padStart(2, '0')}:${String(uploadNow.getMinutes()).padStart(2, '0')}`;
@@ -201,7 +200,6 @@ export default function SurinCourtWarrantApp() {
       reader.onloadend = () => {
         const resultImgUrl = reader.result;
 
-        // บันทึกรูป และอัปเดตวันที่/เวลาอัปโหลดภาพลงใน formData
         setFormData((prev) => ({
           ...prev,
           photos: [...prev.photos, resultImgUrl],
@@ -209,7 +207,6 @@ export default function SurinCourtWarrantApp() {
           sendTime: uploadTimeStr
         }));
 
-        // ตรวจสอบข้อมูล EXIF GPS
         if (window.EXIF) {
           const imgElement = new window.Image();
           imgElement.onload = () => {
@@ -1109,25 +1106,24 @@ export default function SurinCourtWarrantApp() {
                   <div className="p-5 bg-yellow-50 border border-yellow-200 rounded-xl flex flex-col justify-between shadow-sm space-y-3">
                     <div className="text-center">
                       <span className="font-bold text-base text-gray-800 block">พิกัด GPS นำส่ง</span>
-                      <span className="text-xs text-gray-500">กดปุ่มดึงพิกัด หรือพิมพ์/คัดลอกพิกัดมาวางแก้ได้</span>
+                      <span className="text-xs text-gray-500">กดปุ่มดึงพิกัดเพื่อนำเข้าพิกัดตำแหน่งปัจจุบัน</span>
                     </div>
 
                     <button type="button" onClick={handleGetLocation} className="w-full bg-gray-900 hover:bg-gray-800 text-yellow-400 py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow transition">
                       <MapPin className="w-4 h-4" /> ดึงพิกัด GPS ปัจจุบัน
                     </button>
 
+                    {/* ซ่อนช่องกรอกพิกัด GPS (type="hidden") */}
                     <input 
-                      type="text" 
+                      type="hidden" 
                       value={formData.gps} 
                       onChange={(e) => setFormData({ ...formData, gps: e.target.value })}
-                      className="text-center text-sm font-mono font-bold w-full bg-white border-2 border-yellow-400 py-2.5 rounded-lg text-gray-900 focus:ring-2 focus:ring-amber-600 focus:outline-none shadow-inner" 
-                      placeholder="เช่น 14.872185, 103.461160" 
                     />
 
                     <div className="border border-yellow-300 rounded-lg overflow-hidden bg-white shadow-xs">
+                      {/* ซ่อนตัวเลขพิกัด GPS บนแถบพรีวิวแผนที่ เหลือเพียงหัวข้อ */}
                       <div className="bg-yellow-100/80 px-3 py-1 text-[11px] font-bold text-amber-900 flex justify-between items-center">
-                        <span>ภาพพรีวิวแผนที่ดาวเทียม GPS:</span>
-                        <span className="font-mono text-[10px]">{formData.gps || "ยังไม่ได้ระบุ"}</span>
+                        <span>ภาพพรีวิวแผนที่ดาวเทียม GPS</span>
                       </div>
                       <img 
                         src={getMapImageUrl(formData.gps)} 
@@ -1150,7 +1146,6 @@ export default function SurinCourtWarrantApp() {
                       <span className="text-xs text-gray-500">รองรับภาพถ่ายหน้าบ้าน / ผู้รับหมาย (จำกัดขนาดไฟล์ละไม่เกิน 8MB)</span>
                     </div>
 
-                    {/* ปุ่มเลือกรูปถ่ายจากอัลบั้ม เปิดหน้าต่างเลือกไฟล์ภาพในสมาร์ตโฟน/คอมพิวเตอร์ */}
                     <label className="w-full bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
                       <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่
                       <input 
