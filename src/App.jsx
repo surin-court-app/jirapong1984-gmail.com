@@ -1113,15 +1113,7 @@ export default function SurinCourtWarrantApp() {
                       <MapPin className="w-4 h-4" /> ดึงพิกัด GPS ปัจจุบัน
                     </button>
 
-                    {/* ซ่อนช่องกรอกพิกัด GPS (type="hidden") */}
-                    <input 
-                      type="hidden" 
-                      value={formData.gps} 
-                      onChange={(e) => setFormData({ ...formData, gps: e.target.value })}
-                    />
-
                     <div className="border border-yellow-300 rounded-lg overflow-hidden bg-white shadow-xs">
-                      {/* ซ่อนตัวเลขพิกัด GPS บนแถบพรีวิวแผนที่ เหลือเพียงหัวข้อ */}
                       <div className="bg-yellow-100/80 px-3 py-1 text-[11px] font-bold text-amber-900 flex justify-between items-center">
                         <span>ภาพพรีวิวแผนที่ดาวเทียม GPS</span>
                       </div>
