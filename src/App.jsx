@@ -174,7 +174,6 @@ export default function SurinCourtWarrantApp() {
     return dd;
   };
 
-  // เมื่อเลือกอัปโหลดภาพ จะทำการดึงข้อมูล EXIF GPS + วันเวลา เพื่ออัปเดตลงฟอร์มและป้ายบนภาพแผนที่ดาวเทียมทันที
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -390,7 +389,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // สร้าง URL แผนที่ดาวเทียม Yandex Satellite ปักหมุดตามพิกัดตรงกับรูปถ่าย
   const getMapImageUrl = (gpsVal) => {
     let lat = "14.872185", lng = "103.461160";
     if (gpsVal && typeof gpsVal === 'string') {
@@ -408,7 +406,6 @@ export default function SurinCourtWarrantApp() {
     return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
   };
 
-  // ฟังก์ชันดาวน์โหลดเอกสาร Microsoft Word (.doc)
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) {
       alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
@@ -669,7 +666,6 @@ export default function SurinCourtWarrantApp() {
           padding: 0 4px;
         }
 
-        /* ปรับแต่งกล่องป้าย overlay บนภาพแผนที่ดาวเทียมให้คมชัด สวยงาม */
         .gps-overlay-text {
           color: #000000 !important;
           font-weight: 700 !important;
@@ -1804,8 +1800,8 @@ export default function SurinCourtWarrantApp() {
                     
                     <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
                       <div>GPS: {formData.gps || "14.872186, 103.461157"}</div>
-                      <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || 'ไพล'} อำเภอ {formData.district || 'ปราสาท'}</div>
-                      <div>จังหวัด {formData.province || 'สุรินทร์'} {formData.zipcode || '32140'}</div>
+                      <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || ''} อำเภอ {formData.district || ''}</div>
+                      <div>จังหวัด {formData.province || 'สุรินทร์'} {formData.zipcode || ''}</div>
                       <div>วันที่ {formatThaiDate(formData.sendDate)} เวลา {formData.sendTime || getCurrentTimeStr()} น.</div>
                     </div>
                   </div>
@@ -1899,8 +1895,8 @@ export default function SurinCourtWarrantApp() {
                         
                         <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
                           <div>GPS: {item.gps || "14.872186, 103.461157"}</div>
-                          <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || 'ไพล'} อำเภอ {item.district || 'ปราสาท'}</div>
-                          <div>จังหวัด {item.province || 'สุรินทร์'} {item.zipcode || '32140'}</div>
+                          <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || ''} อำเภอ {item.district || ''}</div>
+                          <div>จังหวัด {item.province || 'สุรินทร์'} {item.zipcode || ''}</div>
                           <div>วันที่ {formatThaiDate(item.sendDate)} เวลา {item.sendTime || getCurrentTimeStr()} น.</div>
                         </div>
                       </div>
