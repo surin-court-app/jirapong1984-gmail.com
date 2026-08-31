@@ -166,14 +166,6 @@ export default function SurinCourtWarrantApp() {
     return parts.length === 3 ? `${parseInt(parts[2], 10)} ${thaiMonths[parseInt(parts[1], 10) - 1]} ${parseInt(parts[0], 10) + 543}` : dateString;
   };
 
-  const convertDMSToDD = (degrees, minutes, seconds, direction) => {
-    let dd = degrees + (minutes / 60) + (seconds / 3600);
-    if (direction === "S" || direction === "W") {
-      dd = dd * -1;
-    }
-    return dd;
-  };
-
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -194,33 +186,12 @@ export default function SurinCourtWarrantApp() {
       const reader = new FileReader();
       reader.onloadend = () => {
         const resultImgUrl = reader.result;
-
         setFormData((prev) => ({
           ...prev,
           photos: [...prev.photos, resultImgUrl],
           sendDate: uploadDateStr,
           sendTime: uploadTimeStr
         }));
-
-        if (window.EXIF) {
-          const imgElement = new window.Image();
-          imgElement.onload = () => {
-            window.EXIF.getData(imgElement, function() {
-              const latData = window.EXIF.getTag(this, "GPSLatitude");
-              const latRef = window.EXIF.getTag(this, "GPSLatitudeRef");
-              const lngData = window.EXIF.getTag(this, "GPSLongitude");
-              const lngRef = window.EXIF.getTag(this, "GPSLongitudeRef");
-
-              if (latData && lngData && latRef && lngRef) {
-                const lat = convertDMSToDD(latData[0], latData[1], latData[2], latRef);
-                const lng = convertDMSToDD(lngData[0], lngData[1], lngData[2], lngRef);
-                const extractedGps = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-                setFormData(prev => ({ ...prev, gps: extractedGps }));
-              }
-            });
-          };
-          imgElement.src = resultImgUrl;
-        }
       };
       reader.readAsDataURL(file);
     });
@@ -374,38 +345,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const gpsStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-        setFormData(prev => ({ ...prev, gps: gpsStr }));
-        addAuditLog('FETCH_GPS', `ดึงพิกัด GPS: ${gpsStr}`);
-        alert(`ดึงพิกัด GPS เรียบร้อย: ${gpsStr}`);
-      });
-    } else {
-      alert("เบราว์เซอร์นี้ไม่รองรับการดึง GPS");
-    }
-  };
-
-  const getMapImageUrl = (gpsVal) => {
-    let lat = "14.872185", lng = "103.461160";
-    if (gpsVal && typeof gpsVal === 'string') {
-      const cleanGps = gpsVal.replace(/[^\d.,-]/g, '').trim();
-      const parts = cleanGps.split(',');
-      if (parts.length === 2) {
-        const parsedLat = parseFloat(parts[0]);
-        const parsedLng = parseFloat(parts[1]);
-        if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-          lat = parsedLat.toFixed(6);
-          lng = parsedLng.toFixed(6);
-        }
-      }
-    }
-    return `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
-  };
-
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) {
       alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
@@ -457,23 +396,10 @@ export default function SurinCourtWarrantApp() {
         <br/>
         <div class="center bold">ลักษณะบ้าน <span class="underline-dot">${formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
         <br/>
-        <table>
-          <tr>
-            <td>
-              <div class="bold" style="font-size: 12pt;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
-              ${formData.photos.length > 0 ? `<img src="${formData.photos[0]}" width="350" height="240"/>` : '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>'}
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="bold" style="font-size: 12pt; margin-top: 10px;">พิกัด GPS: ${formData.gps || "14.872185, 103.461160"}</div>
-              <img src="${getMapImageUrl(formData.gps)}" width="350" height="200"/>
-              <div style="font-size: 11pt; font-weight: bold; margin-top: 5px;">
-                GPS: ${formData.gps || "14.872185, 103.461160"} | ${formData.village ? formData.village + ' ' : ''}ต.${formData.subdistrict || ''} อ.${formData.district || ''} จ.${formData.province || 'สุรินทร์'}
-              </div>
-            </td>
-          </tr>
-        </table>
+        <div class="center" style="margin-top: 20px;">
+          <div class="bold" style="font-size: 14pt; margin-bottom: 10px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
+          ${formData.photos.length > 0 ? `<img src="${formData.photos[0]}" width="550"/>` : '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>'}
+        </div>
       </body>
       </html>
     `;
@@ -664,19 +590,6 @@ export default function SurinCourtWarrantApp() {
           border-bottom: 1px dotted #000;
           display: inline-block;
           padding: 0 4px;
-        }
-
-        .gps-overlay-text {
-          color: #000000 !important;
-          font-weight: 700 !important;
-          font-size: 12pt !important;
-          line-height: 1.35 !important;
-          background-color: rgba(255, 255, 255, 0.92);
-          padding: 6px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(0, 0, 0, 0.15);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.12);
-          text-shadow: none !important;
         }
 
         @media print {
@@ -1768,44 +1681,15 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              <div className="mt-0.5 space-y-0.5">
-                <div className="flex flex-col items-center justify-center space-y-0.5 w-full">
-                  
-                  <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-64 bg-white">
+              <div className="mt-1 space-y-1">
+                <div className="flex flex-col items-center justify-center space-y-1 w-full">
+                  <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
                     {formData.photos.length > 0 ? (
-                      <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-64 object-contain mx-auto rounded-lg" />
+                      <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-80 object-contain mx-auto rounded-lg" />
                     ) : (
                       <div className="text-xs text-gray-400 font-bold w-full h-full flex items-center justify-center rounded-lg">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>
                     )}
                   </div>
-
-                  <div className="text-center font-bold text-xs pt-0.5">
-                    พิกัด GPS: {formData.gps || "14.872185, 103.461160"}
-                  </div>
-
-                  {/* ภาพแผนที่ดาวเทียม Yandex แสดงกล่องข้อมูลพิกัด ตำบล อำเภอ จังหวัด วันที่ และเวลา ตามข้อมูลในฟอร์มตรงเป๊ะ */}
-                  <div className="w-full rounded-lg overflow-hidden h-64 relative bg-white">
-                    <img 
-                      src={getMapImageUrl(formData.gps)} 
-                      alt="แผนที่ GPS" 
-                      className="w-full h-64 object-cover block mx-auto rounded-lg" 
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        const cleanGps = formData.gps ? formData.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                        const lat = parseFloat(cleanGps[0]) || 14.872185;
-                        const lng = parseFloat(cleanGps[1]) || 103.461160;
-                        e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
-                      }}
-                    />
-                    
-                    <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
-                      <div>GPS: {formData.gps || "14.872186, 103.461157"}</div>
-                      <div>{formData.village ? `${formData.village} ` : ''}ตำบล {formData.subdistrict || ''} อำเภอ {formData.district || ''}</div>
-                      <div>จังหวัด {formData.province || 'สุรินทร์'} {formData.zipcode || ''}</div>
-                      <div>วันที่ {formatThaiDate(formData.sendDate)} เวลา {formData.sendTime || getCurrentTimeStr()} น.</div>
-                    </div>
-                  </div>
-
                 </div>
               </div>
 
@@ -1864,43 +1748,15 @@ export default function SurinCourtWarrantApp() {
                     </div>
                   </div>
 
-                  <div className="mt-0.5 space-y-0.5">
-                    <div className="flex flex-col items-center justify-center space-y-0.5 w-full">
-                      
-                      <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-64 bg-white">
+                  <div className="mt-1 space-y-1">
+                    <div className="flex flex-col items-center justify-center space-y-1 w-full">
+                      <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
                         {item.photos && item.photos.length > 0 ? (
-                          <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-64 object-contain mx-auto rounded-lg" />
+                          <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-80 object-contain mx-auto rounded-lg" />
                         ) : (
                           <div className="text-xs text-gray-400 font-bold w-full h-full flex items-center justify-center rounded-lg">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>
                         )}
                       </div>
-
-                      <div className="text-center font-bold text-xs pt-0.5">
-                        พิกัด GPS: {item.gps || "14.872185, 103.461160"}
-                      </div>
-
-                      <div className="w-full rounded-lg overflow-hidden h-64 relative bg-white">
-                        <img 
-                          src={getMapImageUrl(item.gps)} 
-                          alt="แผนที่ GPS" 
-                          className="w-full h-64 object-cover block mx-auto rounded-lg" 
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            const cleanGps = item.gps ? item.gps.replace(/[^\d.,-]/g, '').trim().split(',') : ['14.872185', '103.461160'];
-                            const lat = parseFloat(cleanGps[0]) || 14.872185;
-                            const lng = parseFloat(cleanGps[1]) || 103.461160;
-                            e.target.src = `https://static-maps.yandex.ru/1.x/?lang=th_TH&ll=${lng},${lat}&z=14&l=sat,skl&size=600,280&pt=${lng},${lat},pm2rdm`;
-                          }}
-                        />
-                        
-                        <div className="absolute bottom-3 right-3 text-right whitespace-nowrap gps-overlay-text">
-                          <div>GPS: {item.gps || "14.872186, 103.461157"}</div>
-                          <div>{item.village ? `${item.village} ` : ''}ตำบล {item.subdistrict || ''} อำเภอ {item.district || ''}</div>
-                          <div>จังหวัด {item.province || 'สุรินทร์'} {item.zipcode || ''}</div>
-                          <div>วันที่ {formatThaiDate(item.sendDate)} เวลา {item.sendTime || getCurrentTimeStr()} น.</div>
-                        </div>
-                      </div>
-
                     </div>
                   </div>
 
