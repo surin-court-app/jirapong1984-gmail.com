@@ -52,7 +52,6 @@ export default function SurinCourtWarrantApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentRecords, setCurrentRecords] = useState([]);
 
-  // State สำหรับเก็บ Batch ID/Import Time ล่าสุดของเซสชันปัจจุบัน
   const [currentBatchId, setCurrentBatchId] = useState(null);
 
   const [editingUserId, setEditingUserId] = useState(null);
@@ -152,7 +151,6 @@ export default function SurinCourtWarrantApp() {
     };
   }, [isLoggedIn, currentUser]);
 
-  // รีเซ็ตการกรอกข้อมูลและรีเซ็ต Batch ID เมื่อกดปุ่มกรอกข้อมูลเอง
   const handleClearFormForManualInput = () => {
     const newManualBatchId = `manual_${Date.now()}`;
     setCurrentBatchId(newManualBatchId);
@@ -262,7 +260,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // เมื่อเลือกอัปโหลดไฟล์ Excel ใหม่ จะสร้าง newBatchId เพื่อแยกชุดข้อมูล
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser) return;
@@ -291,7 +288,7 @@ export default function SurinCourtWarrantApp() {
 
               parsedRecords.push({
                 id: uniqueId,
-                batchId: newBatchId, // ระบุ ID ชุดไฟล์ Excel
+                batchId: newBatchId,
                 ownerUsername: currentUser.username,
                 blackNo: blackNo,
                 redNo: row[2] ? String(row[2]).trim() : '',
@@ -318,7 +315,7 @@ export default function SurinCourtWarrantApp() {
             return;
           }
 
-          setCurrentBatchId(newBatchId); // ตั้งค่า Batch ID ปัจจุบันเป็นของไฟล์นี้
+          setCurrentBatchId(newBatchId);
 
           await fetch(`${API_URL}/warrants/batch`, {
             method: 'POST',
@@ -419,7 +416,7 @@ export default function SurinCourtWarrantApp() {
         <meta charset='utf-8'>
         <title>บันทึกการปิดหมาย</title>
         <style>
-          body { font-family: 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 1.5rem; }
+          body { font-family: 'TH SarabunPSK', 'TH Sarabun New', Sarabun, sans-serif; font-size: 16pt; line-height: 1.2; margin-top: 1.5rem; }
           .center { text-align: center; }
           .right { text-align: right; }
           .bold { font-weight: bold; }
@@ -583,7 +580,6 @@ export default function SurinCourtWarrantApp() {
 
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
 
-  // คำนวณจำนวนคดีที่ "รายงานแล้ว" เฉพาะของ Batch ปัจจุบันที่อัปโหลด/กรอก
   const currentBatchCompletedRecords = currentBatchId 
     ? currentRecords.filter(r => r.isSaved && r.batchId === currentBatchId)
     : currentRecords.filter(r => r.isSaved && r.sendDate === todayStr);
@@ -641,11 +637,12 @@ export default function SurinCourtWarrantApp() {
   return (
     <div className="min-h-screen bg-gray-100 font-sans pb-12">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=TH+Sarabun+New:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=TH+SarabunPSK:ital,wght@0,400;0,700;1,400;1,700&display=swap');
         
+        /* ปรับใช้ฟอนต์ TH SarabunPSK ขนาด 16pt ในรายงานพิมพ์ */
         .sarabun-font {
-          font-family: 'TH Sarabun New', 'Sarabun', sans-serif !important;
-          font-size: 15pt !important;
+          font-family: 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif !important;
+          font-size: 16pt !important;
           line-height: 1.15 !important;
         }
 
@@ -833,7 +830,6 @@ export default function SurinCourtWarrantApp() {
                       <Clock className="w-3.5 h-3.5" /> รอดำเนินการ ({pendingRecords.length})
                     </button>
                     
-                    {/* ปุ่ม รายงานแล้ว แสดงตัวเลขเฉพาะของ Batch ปัจจุบัน (ตั้งต้นที่ 0 เมื่อเลือกไฟล์ใหม่หรือกดล้างฟอร์ม) */}
                     <button
                       type="button"
                       onClick={() => {
