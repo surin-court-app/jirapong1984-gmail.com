@@ -627,6 +627,7 @@ export default function SurinCourtWarrantApp() {
 
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
 
+  // รายการที่รายงานแล้ว เฉพาะของ Batch/เซสชัน ปัจจุบัน
   const currentBatchCompletedRecords = currentBatchId 
     ? currentRecords.filter(r => r.isSaved && r.batchId === currentBatchId)
     : currentRecords.filter(r => r.isSaved && r.sendDate === todayStr);
@@ -698,7 +699,6 @@ export default function SurinCourtWarrantApp() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=TH+SarabunPSK:ital,wght@0,400;0,700;1,400;1,700&display=swap');
         
-        /* สั่งบังคับให้ฟอนต์ TH SarabunPSK แสดงผลตัวเลขอารบิก ไม่แปลงเป็นเลขไทย */
         .sarabun-font {
           font-family: 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif !important;
           font-size: 16pt !important;
@@ -1189,6 +1189,7 @@ export default function SurinCourtWarrantApp() {
                   <Printer className="w-4 h-4" /> พิมพ์รายงาน (PDF)
                 </button>
 
+                {/* ปรับปรุงปุ่ม "พิมพ์รายงานทั้งหมด" ให้แสดงตัวนับอ้างอิงตามชุดไฟล์/วันปัจจุบัน (currentBatchCompletedRecords.length) */}
                 <button 
                   type="button" 
                   onClick={() => {
@@ -1200,7 +1201,7 @@ export default function SurinCourtWarrantApp() {
                   }} 
                   className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600"
                 >
-                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({allCompletedRecords.length})
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({currentBatchCompletedRecords.length})
                 </button>
               </div>
             </form>
