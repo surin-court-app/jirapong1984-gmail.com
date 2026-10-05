@@ -108,10 +108,10 @@ export default function SurinCourtWarrantApp() {
   };
 
   // ปรับแก้การดึงข้อมูลและแปลงสถานะ isSaved เป็น Boolean ที่ถูกต้อง
-  const fetchUserWarrants = async (username) => {
+ const fetchUserWarrants = async (username) => {
     if (!username) return;
     try {
-      const res = await fetch(`${API_URL}/warrants/${username}`);
+      const res = await fetch(`\({API_URL}/warrants/\){username}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -122,7 +122,7 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(mapped);
         }
       }
-    } catch (e) { console.error("Fetch warrants error:", e); }
+    } catch (e) { console.error("Fetch Warrants Error:", e); }
   };
 
   useEffect(() => {
