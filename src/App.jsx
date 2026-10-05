@@ -300,7 +300,6 @@ export default function SurinCourtWarrantApp() {
             const district = String(row[11] || '').trim();
             let rawPrice = String(row[13] || '0.00').replace(/,/g, '').trim();
 
-            // คัดกรองเฉพาะแถวที่เป็นตัวเลขลำดับคดีแท้จริง (ข้ามหัวกระดาษและข้อความบรรทัดอื่น)
             if (!/^\d+$/.test(seqNo) || !blackNo || blackNo === 'เลขดำที่' || targetName === 'หมายถึงใคร') {
               return;
             }
@@ -348,7 +347,6 @@ export default function SurinCourtWarrantApp() {
           });
 
           if (res.ok) {
-            // อัปเดต State หน้าจอสดทันทีเพื่อให้ตัวเลขเด้งเป็น 36
             setCurrentRecords(prev => {
               const otherRecords = prev.filter(r => r.ownerUsername !== activeUsername);
               return [...otherRecords, ...parsedRecords];
@@ -390,6 +388,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
+  // ✅ แก้ไข: บีบอัดรูปภาพก่อนส่ง และบังคับอัปเดต State หน้าจอเป็น isSaved = true ทันที
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -399,19 +398,65 @@ export default function SurinCourtWarrantApp() {
       return alert("กรุณากดปุ่ม 'เลือกนำเข้า' ของจำเลยที่ต้องการทำรายงานก่อนครับ");
     }
 
-    const recordPayload = [{ ...formData, id: formData.selectedRecordId, ownerUsername: currentUser.username, isSaved: true }];
+    const activeUsername = currentUser.username.trim().toLowerCase();
+
+    // บีบอัดขนาดภาพเพิ่มเติมก่อนส่งขึ้น Cloud ป้องกัน Server Reject
+    const compressedPhotos = [];
+    for (const photo of formData.photos) {
+      if (photo && photo.length > 500000) {
+        try {
+          const img = new window.Image();
+          img.src = photo;
+          await new Promise((res) => { img.onload = res; });
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > 1000) {
+            height = Math.round((height * 1000) / width);
+            width = 1000;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          compressedPhotos.push(canvas.toDataURL('image/jpeg', 0.6));
+        } catch (e) {
+          compressedPhotos.push(photo);
+        }
+      } else {
+        compressedPhotos.push(photo);
+      }
+    }
+
+    const updatedRecord = {
+      ...formData,
+      id: formData.selectedRecordId,
+      ownerUsername: activeUsername,
+      photos: compressedPhotos,
+      isSaved: true
+    };
 
     try {
-      await fetch(`${API_URL}/warrants/batch`, {
+      const res = await fetch(`${API_URL}/warrants/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: currentUser.username, records: recordPayload })
+        body: JSON.stringify({ username: activeUsername, records: [updatedRecord] })
       });
-      await fetchUserWarrants(currentUser.username);
-    } catch (err) { console.error(err); }
 
-    await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
-    alert(`บันทึกรายงานผลของ "${formData.targetName}" เรียบร้อยแล้ว!`);
+      if (res.ok) {
+        // อัปเดต State หน้าจอสดทันที ย้ายรายการไปช่อง "รายงานแล้ว"
+        setCurrentRecords(prev => prev.map(rec => rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec));
+        
+        await fetchUserWarrants(activeUsername);
+        await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
+        alert(`บันทึกรายงานผลของ "${formData.targetName}" เรียบร้อยแล้ว!`);
+      } else {
+        alert("เกิดข้อผิดพลาดในการเซฟข้อมูลลง Server กรุณาลองใหม่อีกครั้ง");
+      }
+    } catch (err) { 
+      console.error(err); 
+      alert("ไม่สามารถเชื่อมต่อ Server ได้");
+    }
   };
 
   const handleDeleteWarrantRecord = async (itemId, blackNo, targetName) => {
