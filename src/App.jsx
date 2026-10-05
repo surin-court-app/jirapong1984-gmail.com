@@ -260,7 +260,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ แก้ไข: บังคับระบุ ownerUsername ให้ตรงกับคนล็อกอินเพื่อซิงก์ตรงแน่นอน 100%
+  // ✅ ฟังก์ชันอ่านไฟล์ Excel บัญชีหมายศาลตรงโครงสร้างตารางจริง 100%
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -268,7 +268,7 @@ export default function SurinCourtWarrantApp() {
       return;
     }
 
-    const activeUsername = currentUser.username.trim();
+    const activeUsername = currentUser.username.trim().toLowerCase();
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -276,50 +276,61 @@ export default function SurinCourtWarrantApp() {
         if (window.XLSX) {
           const wb = window.XLSX.read(evt.target.result, { type: 'binary' });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const data = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
+          const rawRows = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+
+          if (!rawRows || rawRows.length === 0) {
+            alert("ไม่พบข้อมูลในไฟล์ Excel กรุณาตรวจสอบไฟล์");
+            return;
+          }
 
           const parsedRecords = [];
           const nowStamp = Date.now();
           const newBatchId = `batch_${nowStamp}`;
 
-          data.forEach((row, idx) => {
-            if (row && row.length > 5) {
-              const col0 = row[0] ? String(row[0]).trim() : '';
-              const blackNo = row[1] ? String(row[1]).trim() : '';
-              const targetName = row[6] ? String(row[6]).trim() : '';
+          rawRows.forEach((row, idx) => {
+            if (!Array.isArray(row) || row.length < 7) return;
 
-              if (!blackNo || blackNo === 'เลขดำที่' || targetName === 'หมายถึงใคร' || isNaN(parseInt(col0, 10))) {
-                return;
-              }
+            const seqNo = String(row[0] || '').trim();
+            const blackNo = String(row[1] || '').trim();
+            const redNo = String(row[2] || '').trim();
+            const warrantType = String(row[5] || 'หมายนัด').trim();
+            const targetName = String(row[6] || '').trim();
+            const address = String(row[7] || '').trim();
+            const subdistrict = String(row[8] || '').trim();
+            const district = String(row[11] || '').trim();
+            let rawPrice = String(row[13] || '0.00').replace(/,/g, '').trim();
 
-              const uniqueRandom = Math.random().toString(36).substring(2, 9);
-              const uniqueId = `item_${activeUsername}_${nowStamp}_${idx}_${uniqueRandom}`;
-
-              let rawPrice = row[13] !== undefined && row[13] !== null ? String(row[13]).replace(/,/g, '').trim() : '0.00';
-              if (isNaN(parseFloat(rawPrice))) rawPrice = '0.00';
-
-              parsedRecords.push({
-                id: uniqueId,
-                batchId: newBatchId,
-                ownerUsername: activeUsername,
-                blackNo: blackNo,
-                redNo: row[2] ? String(row[2]).trim() : '',
-                warrantType: row[5] ? String(row[5]).trim() : '',
-                targetName: targetName,
-                address: row[7] ? String(row[7]).trim() : '',
-                subdistrict: row[8] ? String(row[8]).trim() : '',
-                district: row[11] ? String(row[11]).trim() : '',
-                province: 'สุรินทร์',
-                zipcode: '32000',
-                price: rawPrice,
-                warrantResult: 'ส่งได้โดยวิธีปิดหมาย', 
-                gps: '', 
-                photos: [],
-                sendDate: todayStr,
-                sendTime: getCurrentTimeStr(), 
-                isSaved: false
-              });
+            // คัดกรองเฉพาะแถวที่เป็นตัวเลขลำดับคดีแท้จริง (ข้ามหัวกระดาษและข้อความบรรทัดอื่น)
+            if (!/^\d+$/.test(seqNo) || !blackNo || blackNo === 'เลขดำที่' || targetName === 'หมายถึงใคร') {
+              return;
             }
+
+            if (isNaN(parseFloat(rawPrice))) rawPrice = '0.00';
+
+            const uniqueRandom = Math.random().toString(36).substring(2, 9);
+            const uniqueId = `item_${activeUsername}_${nowStamp}_${idx}_${uniqueRandom}`;
+
+            parsedRecords.push({
+              id: uniqueId,
+              batchId: newBatchId,
+              ownerUsername: activeUsername,
+              blackNo: blackNo,
+              redNo: redNo,
+              warrantType: warrantType,
+              targetName: targetName,
+              address: address,
+              subdistrict: subdistrict,
+              district: district,
+              province: 'สุรินทร์',
+              zipcode: '32000',
+              price: rawPrice,
+              warrantResult: 'ส่งได้โดยวิธีปิดหมาย', 
+              gps: '', 
+              photos: [],
+              sendDate: todayStr,
+              sendTime: getCurrentTimeStr(), 
+              isSaved: false
+            });
           });
 
           if (parsedRecords.length === 0) {
@@ -345,7 +356,7 @@ export default function SurinCourtWarrantApp() {
           }
         }
       } catch (err) { 
-        console.error(err);
+        console.error("Excel Read Error:", err);
         alert("เกิดข้อผิดพลาดในการอ่านไฟล์ Excel"); 
       }
     };
@@ -1363,7 +1374,7 @@ export default function SurinCourtWarrantApp() {
                             <button
                               type="button"
                               onClick={() => handleDeleteWarrantRecord(rec.id, rec.blackNo, rec.targetName)}
-                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow transition cursor-pointer"
+                              className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow transition cursor-pointer"
                               title="ลบรายการนี้ออกจากระบบ"
                             >
                               <Trash2 className="w-3.5 h-3.5" /> ลบ
