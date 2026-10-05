@@ -159,7 +159,6 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// ✅ แก้ไข: ดึงข้อมูลหมายศาลโดยไม่สนตัวพิมพ์เล็ก-ใหญ่ (Case Insensitive)
 app.get('/api/warrants/:username', async (req, res) => {
   try {
     const targetUsername = (req.params.username || '').trim();
@@ -179,7 +178,7 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
-// ✅ แก้ไข: บันทึกข้อมูลโดยใช้อักษรตัวพิมพ์เล็กเสมอกันเพื่อความถูกต้องในการจับคู่
+// ✅ แก้ไข: ใช้ REPLACE INTO แทน INSERT ... ON CONFLICT ช่วยแก้ปัญหา Error 500 ใน Turso Batch
 app.post('/api/warrants/batch', async (req, res) => {
   try {
     const { username, records } = req.body;
@@ -191,6 +190,8 @@ app.post('/api/warrants/batch', async (req, res) => {
 
     const statements = records.map(rec => {
       const params = [
+        rec.id,
+        cleanUsername,
         rec.blackNo || '',
         rec.redNo || '',
         rec.payer || '',
@@ -212,21 +213,12 @@ app.post('/api/warrants/batch', async (req, res) => {
       ];
 
       return {
-        sql: `INSERT INTO warrants (
-          blackNo, redNo, payer, warrantType, targetName,
+        sql: `REPLACE INTO warrants (
+          id, ownerUsername, blackNo, redNo, payer, warrantType, targetName,
           sendDate, sendTime, address, village, subdistrict, district,
-          province, zipcode, warrantResult, price, gps,
-          photos, isSaved, id, ownerUsername
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          blackNo=excluded.blackNo, redNo=excluded.redNo, payer=excluded.payer,
-          warrantType=excluded.warrantType, targetName=excluded.targetName,
-          sendDate=excluded.sendDate, sendTime=excluded.sendTime, address=excluded.address,
-          village=excluded.village, subdistrict=excluded.subdistrict, district=excluded.district,
-          province=excluded.province, zipcode=excluded.zipcode, warrantResult=excluded.warrantResult,
-          price=excluded.price, gps=excluded.gps, photos=excluded.photos, isSaved=excluded.isSaved,
-          ownerUsername=excluded.ownerUsername`,
-        args: [...params, rec.id, cleanUsername]
+          province, zipcode, warrantResult, price, gps, photos, isSaved
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: params
       };
     });
 
