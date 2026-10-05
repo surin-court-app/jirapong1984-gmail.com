@@ -390,7 +390,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ แก้ไขฟังก์ชันเซฟรายงานผลส่งหมาย บีบอัดรูปถ่ายก่อนส่ง และย้ายไปช่อง "รายงานแล้ว" ทันที
+  // ✅ เซฟรายงานผลส่งหมาย บีบอัดรูปถ่าย ย้ายไปช่อง "รายงานแล้ว"
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;

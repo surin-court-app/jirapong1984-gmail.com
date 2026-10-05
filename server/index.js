@@ -5,8 +5,8 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // เชื่อมต่อฐานข้อมูล Turso Cloud Database
 const db = createClient({
@@ -73,7 +73,7 @@ const db = createClient({
     } catch (e) {}
 
     const adminExists = await db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?)',
+      sql: 'SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?)',
       args: ['admin']
     });
     if (adminExists.rows.length === 0) {
@@ -84,7 +84,7 @@ const db = createClient({
     }
 
     const userExists = await db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?)',
+      sql: 'SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?)',
       args: ['tomsound']
     });
     if (userExists.rows.length === 0) {
@@ -103,7 +103,7 @@ app.post('/api/login', async (req, res) => {
   try {
     const cleanUser = (username || '').trim();
     const result = await db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND password = ?',
+      sql: 'SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND password = ?',
       args: [cleanUser, password]
     });
     if (result.rows.length > 0) res.json({ success: true, user: result.rows[0] });
@@ -127,7 +127,7 @@ app.post('/api/users', async (req, res) => {
   try {
     await db.execute({
       sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
-      args: [(username || '').trim(), password, fullName, position, role]
+      args: [(username || '').trim().toLowerCase(), password, fullName, position, role]
     });
     res.json({ success: true });
   } catch (e) { res.json({ success: false, message: 'Username นี้มีในระบบแล้ว' }); }
@@ -139,7 +139,7 @@ app.put('/api/users/:id', async (req, res) => {
   try {
     await db.execute({
       sql: 'UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?',
-      args: [(username || '').trim(), password, fullName, position, role, id]
+      args: [(username || '').trim().toLowerCase(), password, fullName, position, role, id]
     });
     res.json({ success: true });
   } catch (e) {
@@ -159,12 +159,13 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
+// ✅ ค้นหาหมายศาล ค้นหาแบบกว้างป้องกันชื่อพิมพ์เล็ก-ใหญ่ดึงไม่ขึ้น
 app.get('/api/warrants/:username', async (req, res) => {
   try {
-    const targetUsername = (req.params.username || '').trim();
+    const targetUsername = (req.params.username || '').trim().toLowerCase();
     const result = await db.execute({
-      sql: 'SELECT * FROM warrants WHERE LOWER(ownerUsername) = LOWER(?)',
-      args: [targetUsername]
+      sql: 'SELECT * FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? OR ownerUsername = ?',
+      args: [targetUsername, req.params.username]
     });
     
     const parsed = result.rows.map(w => ({
@@ -178,7 +179,7 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
-// ✅ แก้ไข: ใช้ REPLACE INTO แทน INSERT ... ON CONFLICT ช่วยแก้ปัญหา Error 500 ใน Turso Batch
+// ✅ บันทึกคดีและรูปถ่ายอย่างปลอดภัย
 app.post('/api/warrants/batch', async (req, res) => {
   try {
     const { username, records } = req.body;
@@ -186,43 +187,63 @@ app.post('/api/warrants/batch', async (req, res) => {
       return res.json({ success: true });
     }
 
-    const cleanUsername = (username || '').trim();
+    const cleanUsername = (username || '').trim().toLowerCase();
 
-    const statements = records.map(rec => {
-      const params = [
-        rec.id,
-        cleanUsername,
-        rec.blackNo || '',
-        rec.redNo || '',
-        rec.payer || '',
-        rec.warrantType || '',
-        rec.targetName || '',
-        rec.sendDate || '',
-        rec.sendTime || '',
-        rec.address || '',
-        rec.village || '',
-        rec.subdistrict || '',
-        rec.district || '',
-        rec.province || 'สุรินทร์',
-        rec.zipcode || '',
-        rec.warrantResult || '',
-        rec.price || '0.00',
-        rec.gps || '',
-        JSON.stringify(rec.photos || []),
-        rec.isSaved ? 1 : 0
-      ];
+    for (const rec of records) {
+      const photosJson = JSON.stringify(rec.photos || []);
+      const isSavedVal = (rec.isSaved === true || rec.isSaved === 1 || rec.isSaved === "1") ? 1 : 0;
 
-      return {
-        sql: `REPLACE INTO warrants (
+      await db.execute({
+        sql: `INSERT INTO warrants (
           id, ownerUsername, blackNo, redNo, payer, warrantType, targetName,
           sendDate, sendTime, address, village, subdistrict, district,
           province, zipcode, warrantResult, price, gps, photos, isSaved
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: params
-      };
-    });
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          ownerUsername=excluded.ownerUsername,
+          blackNo=excluded.blackNo,
+          redNo=excluded.redNo,
+          payer=excluded.payer,
+          warrantType=excluded.warrantType,
+          targetName=excluded.targetName,
+          sendDate=excluded.sendDate,
+          sendTime=excluded.sendTime,
+          address=excluded.address,
+          village=excluded.village,
+          subdistrict=excluded.subdistrict,
+          district=excluded.district,
+          province=excluded.province,
+          zipcode=excluded.zipcode,
+          warrantResult=excluded.warrantResult,
+          price=excluded.price,
+          gps=excluded.gps,
+          photos=excluded.photos,
+          isSaved=excluded.isSaved`,
+        args: [
+          rec.id,
+          cleanUsername,
+          rec.blackNo || '',
+          rec.redNo || '',
+          rec.payer || '',
+          rec.warrantType || '',
+          rec.targetName || '',
+          rec.sendDate || '',
+          rec.sendTime || '',
+          rec.address || '',
+          rec.village || '',
+          rec.subdistrict || '',
+          rec.district || '',
+          rec.province || 'สุรินทร์',
+          rec.zipcode || '',
+          rec.warrantResult || '',
+          rec.price || '0.00',
+          rec.gps || '',
+          photosJson,
+          isSavedVal
+        ]
+      });
+    }
 
-    await db.batch(statements, 'write');
     res.json({ success: true });
   } catch (err) {
     console.error("Batch Import Error:", err);
@@ -245,7 +266,7 @@ app.delete('/api/warrants/:id', async (req, res) => {
 app.delete('/api/warrants/owner/:username', async (req, res) => {
   try {
     await db.execute({
-      sql: 'DELETE FROM warrants WHERE LOWER(ownerUsername) = LOWER(?)',
+      sql: 'DELETE FROM warrants WHERE LOWER(TRIM(ownerUsername)) = LOWER(?)',
       args: [(req.params.username || '').trim()]
     });
     res.json({ success: true });
@@ -274,7 +295,7 @@ app.post('/api/audit-logs', async (req, res) => {
   try {
     await db.execute({
       sql: 'INSERT INTO audit_logs (id, timestamp, username, fullName, user, action, details) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      args: [id, timestamp, (username || '').trim(), nameToSave, nameToSave, action, details]
+      args: [id, timestamp, (username || '').trim().toLowerCase(), nameToSave, nameToSave, action, details]
     });
     res.json({ success: true });
   } catch (e) {
