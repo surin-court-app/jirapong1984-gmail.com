@@ -54,7 +54,6 @@ export default function SurinCourtWarrantApp() {
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ✅ บังคับเริ่มต้นเป็นอาร์เรย์ว่างเพื่อดึงข้อมูลตรงจาก Turso Cloud
   const [currentRecords, setCurrentRecords] = useState([]);
 
   const [currentBatchId, setCurrentBatchId] = useState(null);
@@ -98,7 +97,7 @@ export default function SurinCourtWarrantApp() {
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     try {
-      const res = await fetch(`${API_URL}/warrants/${username}`);
+      const res = await fetch(`${API_URL}/warrants/${username.trim()}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -261,10 +260,15 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ อัปเดตฟังก์ชัน handleFileUpload ให้ส่งข้อมูลและซิงก์เข้า Turso Cloud สำเร็จ 100%
+  // ✅ แก้ไข: บังคับระบุ ownerUsername ให้ตรงกับคนล็อกอินเพื่อซิงก์ตรงแน่นอน 100%
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (!file || !currentUser) return;
+    if (!file || !currentUser || !currentUser.username) {
+      alert("กรุณาเข้าสู่ระบบใหม่อีกครั้งก่อนนำเข้าไฟล์");
+      return;
+    }
+
+    const activeUsername = currentUser.username.trim();
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -289,7 +293,7 @@ export default function SurinCourtWarrantApp() {
               }
 
               const uniqueRandom = Math.random().toString(36).substring(2, 9);
-              const uniqueId = `item_${currentUser.username}_${nowStamp}_${idx}_${uniqueRandom}`;
+              const uniqueId = `item_${activeUsername}_${nowStamp}_${idx}_${uniqueRandom}`;
 
               let rawPrice = row[13] !== undefined && row[13] !== null ? String(row[13]).replace(/,/g, '').trim() : '0.00';
               if (isNaN(parseFloat(rawPrice))) rawPrice = '0.00';
@@ -297,7 +301,7 @@ export default function SurinCourtWarrantApp() {
               parsedRecords.push({
                 id: uniqueId,
                 batchId: newBatchId,
-                ownerUsername: currentUser.username,
+                ownerUsername: activeUsername,
                 blackNo: blackNo,
                 redNo: row[2] ? String(row[2]).trim() : '',
                 warrantType: row[5] ? String(row[5]).trim() : '',
@@ -326,22 +330,18 @@ export default function SurinCourtWarrantApp() {
           setCurrentBatchId(newBatchId);
           setExcelFilterStatus('pending');
 
-          try {
-            const res = await fetch(`${API_URL}/warrants/batch`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: currentUser.username, records: parsedRecords })
-            });
-            if (res.ok) {
-              await fetchUserWarrants(currentUser.username);
-              await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-              alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลซิงก์เข้า Turso Cloud สำเร็จ ${parsedRecords.length} รายการ`);
-            } else {
-              alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลเข้า Server");
-            }
-          } catch (err) { 
-            console.error(err);
-            alert("เกิดข้อผิดพลาดในการเชื่อมต่อ Server");
+          const res = await fetch(`${API_URL}/warrants/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: activeUsername, records: parsedRecords })
+          });
+
+          if (res.ok) {
+            await fetchUserWarrants(activeUsername);
+            await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
+            alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลซิงก์เข้า Turso Cloud สำเร็จ ${parsedRecords.length} รายการ`);
+          } else {
+            alert("เกิดข้อผิดพลาดในการเซฟข้อมูลลง Server");
           }
         }
       } catch (err) { 
