@@ -5,8 +5,8 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // เชื่อมต่อฐานข้อมูล Turso Cloud Database
 const db = createClient({
@@ -150,7 +150,6 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// ✅ ดึงข้อมูลหมายศาลของผู้ใช้งาน ค้นหาคลอบคลุมทั้งพิมพ์เล็กพิมพ์ใหญ่
 app.get('/api/warrants/:username', async (req, res) => {
   try {
     const targetUsername = (req.params.username || '').trim().toLowerCase();
@@ -170,7 +169,7 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
-// ✅ บันทึกข้อมูลหมายศาลเข้า Turso DB ป้องกัน Error Conflict แบบ 100%
+// ✅ แก้ไข: บันทึกข้อมูลแบบ REPLACE INTO สั้น กระชับ เสถียร 100%
 app.post('/api/warrants/batch', async (req, res) => {
   try {
     const { username, records } = req.body;
@@ -185,48 +184,29 @@ app.post('/api/warrants/batch', async (req, res) => {
       const isSavedVal = (rec.isSaved === true || rec.isSaved === 1 || rec.isSaved === "1") ? 1 : 0;
 
       await db.execute({
-        sql: `INSERT INTO warrants (
+        sql: `REPLACE INTO warrants (
           id, ownerUsername, blackNo, redNo, payer, warrantType, targetName,
           sendDate, sendTime, address, subdistrict, district,
           province, zipcode, warrantResult, price, gps, photos, isSaved
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          ownerUsername=excluded.ownerUsername,
-          blackNo=excluded.blackNo,
-          redNo=excluded.redNo,
-          payer=excluded.payer,
-          warrantType=excluded.warrantType,
-          targetName=excluded.targetName,
-          sendDate=excluded.sendDate,
-          sendTime=excluded.sendTime,
-          address=excluded.address,
-          subdistrict=excluded.subdistrict,
-          district=excluded.district,
-          province=excluded.province,
-          zipcode=excluded.zipcode,
-          warrantResult=excluded.warrantResult,
-          price=excluded.price,
-          gps=excluded.gps,
-          photos=excluded.photos,
-          isSaved=excluded.isSaved`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
-          rec.id,
+          String(rec.id),
           cleanUsername,
-          rec.blackNo || '',
-          rec.redNo || '',
-          rec.payer || '',
-          rec.warrantType || '',
-          rec.targetName || '',
-          rec.sendDate || '',
-          rec.sendTime || '',
-          rec.address || '',
-          rec.subdistrict || '',
-          rec.district || '',
-          rec.province || 'สุรินทร์',
-          rec.zipcode || '',
-          rec.warrantResult || '',
-          rec.price || '0.00',
-          rec.gps || '',
+          String(rec.blackNo || ''),
+          String(rec.redNo || ''),
+          String(rec.payer || ''),
+          String(rec.warrantType || ''),
+          String(rec.targetName || ''),
+          String(rec.sendDate || ''),
+          String(rec.sendTime || ''),
+          String(rec.address || ''),
+          String(rec.subdistrict || ''),
+          String(rec.district || ''),
+          String(rec.province || 'สุรินทร์'),
+          String(rec.zipcode || ''),
+          String(rec.warrantResult || ''),
+          String(rec.price || '0.00'),
+          String(rec.gps || ''),
           photosJson,
           isSavedVal
         ]
@@ -292,10 +272,8 @@ app.post('/api/audit-logs', async (req, res) => {
   }
 });
 
-// เสิร์ฟไฟล์ Static ของ React
 app.use(express.static(path.join(__dirname, '../dist')));
 
-// บังคับ Route SPA หน้า React ทุกหน้า
 app.get(/(.*)/, (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });

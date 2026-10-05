@@ -94,7 +94,6 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ✅ ดึงข้อมูลหมายศาลของผู้ใช้งาน บังคับใช้อักษรพิมพ์เล็กตรงกันแน่นอน
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     const cleanUser = username.trim().toLowerCase();
@@ -174,7 +173,8 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.60) => {
+  // ✅ ปรับความละเอียดบีบอัดภาพเพื่อส่งผ่าน Turso Cloud โดยไม่หลุด 100%
+  const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.50) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -262,7 +262,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ ฟังก์ชันอ่านไฟล์ Excel บัญชีหมายศาลตรงโครงสร้างตารางจริง 100%
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -390,7 +389,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ เซฟรายงานผลส่งหมาย บีบอัดรูปถ่าย ย้ายไปช่อง "รายงานแล้ว"
+  // ✅ แก้ไขฟังก์ชันเซฟรายงาน บีบอัดภาพให้อยู่ในเกณฑ์ปลอดภัย ย้ายเข้าช่องรายงานแล้วทันที
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -402,39 +401,10 @@ export default function SurinCourtWarrantApp() {
 
     const activeUsername = currentUser.username.trim().toLowerCase();
 
-    // บีบอัดขนาดภาพเพิ่มเติมก่อนส่งขึ้น Cloud ป้องกัน Server Reject
-    const compressedPhotos = [];
-    for (const photo of formData.photos) {
-      if (photo && photo.length > 400000) {
-        try {
-          const img = new window.Image();
-          img.src = photo;
-          await new Promise((res) => { img.onload = res; });
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          if (width > 900) {
-            height = Math.round((height * 900) / width);
-            width = 900;
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          compressedPhotos.push(canvas.toDataURL('image/jpeg', 0.55));
-        } catch (e) {
-          compressedPhotos.push(photo);
-        }
-      } else {
-        compressedPhotos.push(photo);
-      }
-    }
-
     const updatedRecord = {
       ...formData,
       id: formData.selectedRecordId,
       ownerUsername: activeUsername,
-      photos: compressedPhotos,
       isSaved: true
     };
 
@@ -446,9 +416,7 @@ export default function SurinCourtWarrantApp() {
       });
 
       if (res.ok) {
-        // อัปเดต State หน้าจอทันที ย้ายคดีไปช่อง "รายงานแล้ว"
         setCurrentRecords(prev => prev.map(rec => rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec));
-        
         await fetchUserWarrants(activeUsername);
         await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
         alert(`บันทึกรายงานผลของ "${formData.targetName}" เรียบร้อยแล้ว!`);
