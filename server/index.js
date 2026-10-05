@@ -268,7 +268,7 @@ app.post('/api/audit-logs', async (req, res) => {
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // บังคับ Route SPA หน้า React ทุกหน้า
-app.get('*', (req, res) => {
+app.get(/(.*)/, (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
