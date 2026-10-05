@@ -52,7 +52,6 @@ const db = createClient({
       )
     `);
 
-    // ป้องกันกรณีโครงสร้างตารางเดิมไม่มีคอลัมน์ village
     try {
       await db.execute(`ALTER TABLE warrants ADD COLUMN village TEXT`);
     } catch (e) {
@@ -65,10 +64,16 @@ const db = createClient({
         timestamp TEXT,
         username TEXT,
         fullName TEXT,
+        user TEXT,
         action TEXT,
         details TEXT
       )
     `);
+
+    // รองรับกรณีตาราง audit_logs เดิมยังไม่มีคอลัมน์ user
+    try {
+      await db.execute(`ALTER TABLE audit_logs ADD COLUMN user TEXT`);
+    } catch (e) {}
 
     const adminExists = await db.execute({
       sql: 'SELECT * FROM users WHERE username = ?',
@@ -232,27 +237,44 @@ app.delete('/api/warrants/owner/:username', async (req, res) => {
   res.json({ success: true });
 });
 
+// API สำหรับดึง Audit Logs พร้อมแมปชื่อผู้ใช้งานให้ครอบคลุมทุกเวอร์ชัน
 app.get('/api/audit-logs', async (req, res) => {
-  const result = await db.execute('SELECT * FROM audit_logs ORDER BY timestamp DESC');
-  res.json(result.rows);
+  try {
+    const result = await db.execute('SELECT * FROM audit_logs ORDER BY timestamp DESC');
+    const mappedLogs = result.rows.map(log => ({
+      ...log,
+      user: log.fullName || log.user || log.username || 'ผู้ใช้งานระบบ',
+      fullName: log.fullName || log.user || log.username || 'ผู้ใช้งานระบบ'
+    }));
+    res.json(mappedLogs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/audit-logs', async (req, res) => {
-  const { id, timestamp, username, fullName, action, details } = req.body;
-  await db.execute({
-    sql: 'INSERT INTO audit_logs (id, timestamp, username, fullName, action, details) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [id, timestamp, username, fullName, action, details]
-  });
-  res.json({ success: true });
+  const { id, timestamp, username, fullName, user, action, details } = req.body;
+  const nameToSave = fullName || user || username || '';
+  try {
+    await db.execute({
+      sql: 'INSERT INTO audit_logs (id, timestamp, username, fullName, user, action, details) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [id, timestamp, username, nameToSave, nameToSave, action, details]
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
+// เสิร์ฟไฟล์ Static ของ React
 app.use(express.static(path.join(__dirname, '../dist')));
 
-app.get('/{*splat}', (req, res) => {
+// บังคับ Route SPA หน้า React ทุกหน้า
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
