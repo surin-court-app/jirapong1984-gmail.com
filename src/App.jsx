@@ -107,17 +107,22 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
+  // ปรับแก้การดึงข้อมูลและแปลงสถานะ isSaved เป็น Boolean ที่ถูกต้อง
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     try {
       const res = await fetch(`${API_URL}/warrants/${username}`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setCurrentRecords(data);
+        if (Array.isArray(data)) {
+          const mapped = data.map(w => ({
+            ...w,
+            isSaved: w.isSaved === 1 || w.isSaved === true || w.isSaved === "1"
+          }));
+          setCurrentRecords(mapped);
         }
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Fetch warrants error:", e); }
   };
 
   useEffect(() => {
@@ -394,6 +399,8 @@ export default function SurinCourtWarrantApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: currentUser.username, records: recordPayload })
       });
+      // ดึงข้อมูลใหม่จาก Server เพื่อซิงก์สถานะทันที
+      fetchUserWarrants(currentUser.username);
     } catch (err) { console.error(err); }
 
     await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
@@ -523,6 +530,7 @@ export default function SurinCourtWarrantApp() {
         setPasswordInput('');
         setActiveTab('warrantForm');
         setFormData({ ...initialFormState, sendDate: todayStr, sendTime: getCurrentTimeStr() });
+        fetchUserWarrants(data.user.username);
         addAuditLog('LOGIN', 'เข้าสู่ระบบสำเร็จ', data.user);
       } else {
         setLoginError(data.message);
@@ -607,7 +615,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ปรับปรุงตรรกะคลังย้อนหลังให้รวมรายการคดีทั้งหมด 100%
   const getGroupedArchive = () => {
     const archive = {};
     const monthNames = [
