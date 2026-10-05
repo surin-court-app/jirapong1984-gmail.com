@@ -70,7 +70,6 @@ const db = createClient({
       )
     `);
 
-    // รองรับกรณีตาราง audit_logs เดิมยังไม่มีคอลัมน์ user
     try {
       await db.execute(`ALTER TABLE audit_logs ADD COLUMN user TEXT`);
     } catch (e) {}
@@ -153,7 +152,7 @@ app.get('/api/warrants/:username', async (req, res) => {
     });
     const parsed = result.rows.map(w => ({
       ...w,
-      isSaved: w.isSaved === 1,
+      isSaved: w.isSaved === 1 || w.isSaved === true || w.isSaved === "1",
       photos: JSON.parse(w.photos || '[]')
     }));
     res.json(parsed);
@@ -237,7 +236,6 @@ app.delete('/api/warrants/owner/:username', async (req, res) => {
   res.json({ success: true });
 });
 
-// API สำหรับดึง Audit Logs พร้อมแมปชื่อผู้ใช้งานให้ครอบคลุมทุกเวอร์ชัน
 app.get('/api/audit-logs', async (req, res) => {
   try {
     const result = await db.execute('SELECT * FROM audit_logs ORDER BY timestamp DESC');
