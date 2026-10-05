@@ -94,16 +94,18 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
+  // ✅ ดึงข้อมูลหมายศาลของผู้ใช้งาน บังคับใช้อักษรพิมพ์เล็กตรงกันแน่นอน
   const fetchUserWarrants = async (username) => {
     if (!username) return;
+    const cleanUser = username.trim().toLowerCase();
     try {
-      const res = await fetch(`${API_URL}/warrants/${username.trim()}`);
+      const res = await fetch(`${API_URL}/warrants/${cleanUser}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
           const mapped = data.map(w => ({
             ...w,
-            isSaved: w.isSaved === 1 || w.isSaved === true || w.isSaved === "1"
+            isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
           }));
           setCurrentRecords(mapped);
         }
@@ -172,7 +174,7 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.70) => {
+  const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.60) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -388,7 +390,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ แก้ไข: บีบอัดรูปภาพก่อนส่ง และบังคับอัปเดต State หน้าจอเป็น isSaved = true ทันที
+  // ✅ แก้ไขฟังก์ชันเซฟรายงานผลส่งหมาย บีบอัดรูปถ่ายก่อนส่ง และย้ายไปช่อง "รายงานแล้ว" ทันที
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -403,7 +405,7 @@ export default function SurinCourtWarrantApp() {
     // บีบอัดขนาดภาพเพิ่มเติมก่อนส่งขึ้น Cloud ป้องกัน Server Reject
     const compressedPhotos = [];
     for (const photo of formData.photos) {
-      if (photo && photo.length > 500000) {
+      if (photo && photo.length > 400000) {
         try {
           const img = new window.Image();
           img.src = photo;
@@ -411,15 +413,15 @@ export default function SurinCourtWarrantApp() {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          if (width > 1000) {
-            height = Math.round((height * 1000) / width);
-            width = 1000;
+          if (width > 900) {
+            height = Math.round((height * 900) / width);
+            width = 900;
           }
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          compressedPhotos.push(canvas.toDataURL('image/jpeg', 0.6));
+          compressedPhotos.push(canvas.toDataURL('image/jpeg', 0.55));
         } catch (e) {
           compressedPhotos.push(photo);
         }
@@ -444,7 +446,7 @@ export default function SurinCourtWarrantApp() {
       });
 
       if (res.ok) {
-        // อัปเดต State หน้าจอสดทันที ย้ายรายการไปช่อง "รายงานแล้ว"
+        // อัปเดต State หน้าจอทันที ย้ายคดีไปช่อง "รายงานแล้ว"
         setCurrentRecords(prev => prev.map(rec => rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec));
         
         await fetchUserWarrants(activeUsername);
