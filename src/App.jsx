@@ -54,14 +54,8 @@ export default function SurinCourtWarrantApp() {
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [currentRecords, setCurrentRecords] = useState(() => {
-    try {
-      const saved = localStorage.getItem('srnc_court_records');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  // ✅ แก้ไข: เริ่มต้นเป็นอาร์เรย์ว่างเสมอ เพื่อบังคับให้ดึงข้อมูลจาก Server ทุกอุปกรณ์
+  const [currentRecords, setCurrentRecords] = useState([]);
 
   const [currentBatchId, setCurrentBatchId] = useState(null);
 
@@ -87,12 +81,6 @@ export default function SurinCourtWarrantApp() {
 
   const [formData, setFormData] = useState(initialFormState);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('srnc_court_records', JSON.stringify(currentRecords));
-    } catch (e) { console.error(e); }
-  }, [currentRecords]);
-
   const fetchUsers = async () => {
     try {
       const res = await fetch(`${API_URL}/users`);
@@ -107,7 +95,6 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ✅ แก้ไขไวยากรณ์ Template Literal ให้ดึง API ได้ถูกต้อง 100%
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     try {
@@ -345,6 +332,7 @@ export default function SurinCourtWarrantApp() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ username: currentUser.username, records: parsedRecords })
             });
+            fetchUserWarrants(currentUser.username);
           } catch (err) { console.error(err); }
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
