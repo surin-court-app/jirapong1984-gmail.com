@@ -122,6 +122,7 @@ export default function SurinCourtWarrantApp() {
 
   useEffect(() => {
     fetchUsers();
+    fetchAuditLogs();
   }, []);
 
   useEffect(() => {
@@ -163,6 +164,7 @@ export default function SurinCourtWarrantApp() {
       sendDate: todayStr,
       sendTime: getCurrentTimeStr()
     });
+    addAuditLog('MANUAL_INPUT_START', 'เปิดฟอร์มสำหรับกรอกข้อมูลด้วยตัวเอง');
   };
 
   const formatThaiDate = (dateString) => {
@@ -329,7 +331,6 @@ export default function SurinCourtWarrantApp() {
           }
 
           setCurrentBatchId(newBatchId);
-
           setCurrentRecords(parsedRecords);
           setExcelFilterStatus('pending');
 
@@ -341,7 +342,7 @@ export default function SurinCourtWarrantApp() {
             });
           } catch (err) { console.error(err); }
 
-          addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel: ${file.name} (${parsedRecords.length} รายการ)`);
+          await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
           alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลจำเลยทั้งหมด ${parsedRecords.length} รายการ`);
         }
       } catch (err) { 
@@ -371,6 +372,7 @@ export default function SurinCourtWarrantApp() {
       gps: item.gps || '',
       photos: item.photos || []
     });
+    addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
   const handleSaveFormData = async (e) => {
@@ -394,6 +396,7 @@ export default function SurinCourtWarrantApp() {
       });
     } catch (err) { console.error(err); }
 
+    await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
     alert(`บันทึกรายงานผลของ "${formData.targetName}" เรียบร้อยแล้ว!`);
   };
 
@@ -403,6 +406,7 @@ export default function SurinCourtWarrantApp() {
       try {
         await fetch(`${API_URL}/warrants/${itemId}`, { method: 'DELETE' });
       } catch (err) { console.error(err); }
+      addAuditLog('DELETE_WARRANT', `ลบรายการคดี: ${targetName} (${blackNo || '-'})`);
     }
   };
 
@@ -519,6 +523,7 @@ export default function SurinCourtWarrantApp() {
         setPasswordInput('');
         setActiveTab('warrantForm');
         setFormData({ ...initialFormState, sendDate: todayStr, sendTime: getCurrentTimeStr() });
+        addAuditLog('LOGIN', 'เข้าสู่ระบบสำเร็จ', data.user);
       } else {
         setLoginError(data.message);
       }
@@ -528,6 +533,7 @@ export default function SurinCourtWarrantApp() {
   };
 
   const handleLogout = () => {
+    if (currentUser) addAuditLog('LOGOUT', 'ออกจากระบบ');
     localStorage.removeItem('srnc_court_user');
     setIsLoggedIn(false);
     setCurrentUser(null);
@@ -601,6 +607,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ปรับปรุงตรรกะคลังย้อนหลังให้รวมรายการคดีทั้งหมด 100%
   const getGroupedArchive = () => {
     const archive = {};
     const monthNames = [
@@ -609,8 +616,7 @@ export default function SurinCourtWarrantApp() {
     ];
 
     currentRecords.forEach(rec => {
-      const dateStr = rec.sendDate || (rec.createdAt ? rec.createdAt.split('T')[0] : todayStr);
-      if (!dateStr) return;
+      const dateStr = rec.sendDate || todayStr;
       const parts = dateStr.split('-');
       if (parts.length === 3) {
         let rawYear = parseInt(parts[0], 10);
@@ -1524,7 +1530,7 @@ export default function SurinCourtWarrantApp() {
                     filteredAuditLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50 transition">
                         <td className="p-3 text-gray-500 whitespace-nowrap">{log.timestamp}</td>
-                        <td className="p-3 font-bold text-amber-900 whitespace-nowrap">{log.fullName} ({log.username})</td>
+                        <td className="p-3 font-bold text-amber-900 whitespace-nowrap">{log.fullName || log.user} ({log.username})</td>
                         <td className="p-3 font-bold text-blue-800 whitespace-nowrap">{log.action}</td>
                         <td className="p-3 text-gray-800">{log.details}</td>
                       </tr>
@@ -1767,9 +1773,7 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* ==========================================
-            แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 สมบูรณ์
-            ========================================== */}
+        {/* แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 */}
         <div className="print-area hidden sarabun-font bg-white text-black max-w-2xl mx-auto">
           {printMode === 'single' && (
             <div className="page-single flex flex-col justify-between">
@@ -1821,7 +1825,6 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* การแสดงผลรูปภาพในรายงาน PDF A4 */}
               <div className="mt-1 space-y-1">
                 {formData.photos.length === 1 && (
                   <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
