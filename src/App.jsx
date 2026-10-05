@@ -1,0 +1,1937 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
+
+const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
+
+export default function SurinCourtWarrantApp() {
+  const getCurrentTimeStr = () => {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const warrantResultOptions = [
+    "ส่งได้โดยวิธีปิดหมาย",
+    "ส่งได้รับได้ด้วยตัวเอง",
+    "ส่งได้โดยวิธีปิดประกาศ",
+    "ส่งได้โดยมีผู้แทน ซึ่งอายุกว่า 20 ปี และอยู่บ้าน/สำนักงานเดียวกัน",
+    "ส่งไม่ได้เพราะไม่มีผู้รับตามจ่าหน้า",
+    "ส่งไม่ได้เพราะบ้านรื้อถอน",
+    "ส่งได้เพราะ...",
+    "ส่งไม่ได้เพราะ...",
+    "อื่น..."
+  ];
+
+  const [users, setUsers] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [selectedUserFilter, setSelectedUserFilter] = useState('ALL');
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('srnc_court_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem('srnc_court_user');
+  });
+
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [activeTab, setActiveTab] = useState('warrantForm');
+
+  const [printMode, setPrintMode] = useState('single');
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [selectedPrintDate, setSelectedPrintDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const [currentRecords, setCurrentRecords] = useState(() => {
+    try {
+      const saved = localStorage.getItem('srnc_court_records');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [currentBatchId, setCurrentBatchId] = useState(null);
+
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
+  const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
+
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const initialFormState = {
+    selectedRecordId: null,
+    blackNo: '', redNo: '', payer: '',
+    warrantType: '', targetName: '', 
+    sendDate: todayStr, 
+    sendTime: getCurrentTimeStr(),
+    address: '', subdistrict: '', district: '', province: 'สุรินทร์', zipcode: '32000', warrantResult: 'ส่งได้โดยวิธีปิดหมาย', price: '', gps: '', photos: []
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('srnc_court_records', JSON.stringify(currentRecords));
+    } catch (e) { console.error(e); }
+  }, [currentRecords]);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users`);
+      if (res.ok) setUsers(await res.json());
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchAuditLogs = async () => {
+    try {
+      const res = await fetch(`${API_URL}/audit-logs`);
+      if (res.ok) setAuditLogs(await res.json());
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchUserWarrants = async (username) => {
+    if (!username) return;
+    try {
+      const res = await fetch(`${API_URL}/warrants/${username}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setCurrentRecords(data);
+        }
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchUserWarrants(currentUser.username);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (activeTab === 'auditLogs' && currentUser?.role === 'admin') {
+      fetchAuditLogs();
+    }
+  }, [activeTab]);
+
+  const addAuditLog = async (action, details, userObj = currentUser) => {
+    const newLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      timestamp: new Date().toLocaleString('th-TH'),
+      username: userObj ? userObj.username : 'Unknown',
+      fullName: userObj ? userObj.fullName : 'ไม่ระบุตัวตน',
+      action, details
+    };
+    try {
+      await fetch(`${API_URL}/audit-logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLog)
+      });
+      fetchAuditLogs();
+    } catch (e) { console.error(e); }
+  };
+
+  const handleClearFormForManualInput = () => {
+    const newManualBatchId = `manual_${Date.now()}`;
+    setCurrentBatchId(newManualBatchId);
+    setFormData({
+      ...initialFormState,
+      selectedRecordId: `manual_${currentUser?.username || 'user'}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      sendDate: todayStr,
+      sendTime: getCurrentTimeStr()
+    });
+  };
+
+  const formatThaiDate = (dateString) => {
+    if (!dateString) return "....................";
+    const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+    const parts = dateString.split('-');
+    if (parts.length === 3) {
+      const day = parseInt(parts[2], 10);
+      const month = thaiMonths[parseInt(parts[1], 10) - 1];
+      let year = parseInt(parts[0], 10);
+      if (year < 2500) year += 543;
+      return `${day} ${month} ${year}`;
+    }
+    return dateString;
+  };
+
+  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.70) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedDataUrl);
+        };
+      };
+    });
+  };
+
+  const handleImageChange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const validFiles = files.filter(file => {
+      if (file.size > 12 * 1024 * 1024) {
+        alert(`ไฟล์ ${file.name} มีขนาดเกิน 12MB`);
+        return false;
+      }
+      return true;
+    });
+
+    const uploadNow = new Date();
+    const uploadDateStr = uploadNow.toISOString().split('T')[0];
+    const uploadTimeStr = `${String(uploadNow.getHours()).padStart(2, '0')}:${String(uploadNow.getMinutes()).padStart(2, '0')}`;
+
+    const newPhotos = [];
+    for (const file of validFiles) {
+      try {
+        const compressedBase64 = await compressImage(file);
+        newPhotos.push(compressedBase64);
+      } catch (err) { console.error(err); }
+    }
+
+    if (newPhotos.length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        photos: [...prev.photos, ...newPhotos],
+        sendDate: uploadDateStr,
+        sendTime: uploadTimeStr
+      }));
+    }
+  };
+
+  const handleRemovePhoto = (indexToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, idx) => idx !== indexToRemove)
+    }));
+  };
+
+  const handleSelectWarrantResult = (e) => {
+    const selectedVal = e.target.value;
+    if (!selectedVal) return;
+
+    if (selectedVal === "ส่งได้เพราะ..." || selectedVal === "ส่งไม่ได้เพราะ..." || selectedVal === "อื่น...") {
+      setFormData(prev => ({ ...prev, warrantResult: selectedVal.replace('...', ' ') }));
+    } else {
+      setFormData(prev => ({ ...prev, warrantResult: selectedVal }));
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentUser) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        if (window.XLSX) {
+          const wb = window.XLSX.read(evt.target.result, { type: 'binary' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const data = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+          const parsedRecords = [];
+          const nowStamp = Date.now();
+          const newBatchId = `batch_${nowStamp}`;
+
+          data.forEach((row, idx) => {
+            if (row && row.length > 5) {
+              const col0 = row[0] ? String(row[0]).trim() : '';
+              const blackNo = row[1] ? String(row[1]).trim() : '';
+              const targetName = row[6] ? String(row[6]).trim() : '';
+
+              if (!blackNo || blackNo === 'เลขดำที่' || targetName === 'หมายถึงใคร' || isNaN(parseInt(col0, 10))) {
+                return;
+              }
+
+              const uniqueRandom = Math.random().toString(36).substring(2, 9);
+              const uniqueId = `item_${currentUser.username}_${nowStamp}_${idx}_${uniqueRandom}`;
+
+              let rawPrice = row[13] !== undefined && row[13] !== null ? String(row[13]).replace(/,/g, '').trim() : '0.00';
+              if (isNaN(parseFloat(rawPrice))) rawPrice = '0.00';
+
+              parsedRecords.push({
+                id: uniqueId,
+                batchId: newBatchId,
+                ownerUsername: currentUser.username,
+                blackNo: blackNo,
+                redNo: row[2] ? String(row[2]).trim() : '',
+                warrantType: row[5] ? String(row[5]).trim() : '',
+                targetName: targetName,
+                address: row[7] ? String(row[7]).trim() : '',
+                subdistrict: row[8] ? String(row[8]).trim() : '',
+                district: row[11] ? String(row[11]).trim() : '',
+                province: 'สุรินทร์',
+                zipcode: '32000',
+                price: rawPrice,
+                warrantResult: 'ส่งได้โดยวิธีปิดหมาย', 
+                gps: '', 
+                photos: [],
+                sendDate: todayStr,
+                sendTime: getCurrentTimeStr(), 
+                isSaved: false
+              });
+            }
+          });
+
+          if (parsedRecords.length === 0) {
+            alert("ไม่พบข้อมูลจำเลยในไฟล์ Excel กรุณาตรวจสอบรูปแบบไฟล์");
+            return;
+          }
+
+          setCurrentBatchId(newBatchId);
+
+          setCurrentRecords(parsedRecords);
+          setExcelFilterStatus('pending');
+
+          try {
+            await fetch(`${API_URL}/warrants/batch`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: currentUser.username, records: parsedRecords })
+            });
+          } catch (err) { console.error(err); }
+
+          addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel: ${file.name} (${parsedRecords.length} รายการ)`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลจำเลยทั้งหมด ${parsedRecords.length} รายการ`);
+        }
+      } catch (err) { 
+        console.error(err);
+        alert("เกิดข้อผิดพลาดในการอ่านไฟล์ Excel"); 
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleSelectExcelData = (item) => {
+    setFormData({
+      selectedRecordId: item.id,
+      blackNo: item.blackNo || '',
+      redNo: item.redNo || '',
+      warrantType: item.warrantType || '',
+      targetName: item.targetName || '',
+      sendDate: item.sendDate || todayStr,
+      sendTime: item.sendTime || getCurrentTimeStr(),
+      address: item.address || '',
+      subdistrict: item.subdistrict || '',
+      district: item.district || '',
+      province: item.province || 'สุรินทร์',
+      zipcode: item.zipcode || '32000',
+      warrantResult: item.warrantResult || 'ส่งได้โดยวิธีปิดหมาย',
+      price: item.price || '0.00',
+      gps: item.gps || '',
+      photos: item.photos || []
+    });
+  };
+
+  const handleSaveFormData = async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    if (!formData.blackNo && !formData.targetName) return alert("กรุณากรอกเลขดำหรือชื่อผู้รับหมายก่อนกดบันทึก");
+
+    if (!formData.selectedRecordId) {
+      return alert("กรุณากดปุ่ม 'เลือกนำเข้า' ของจำเลยที่ต้องการทำรายงานก่อนครับ");
+    }
+
+    const recordPayload = [{ ...formData, id: formData.selectedRecordId, ownerUsername: currentUser.username, isSaved: true }];
+
+    setCurrentRecords(prev => prev.map(r => r.id === formData.selectedRecordId ? { ...r, ...formData, isSaved: true } : r));
+
+    try {
+      await fetch(`${API_URL}/warrants/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: currentUser.username, records: recordPayload })
+      });
+    } catch (err) { console.error(err); }
+
+    alert(`บันทึกรายงานผลของ "${formData.targetName}" เรียบร้อยแล้ว!`);
+  };
+
+  const handleDeleteWarrantRecord = async (itemId, blackNo, targetName) => {
+    if (window.confirm(`ลบรายการจำเลย ${targetName} (${blackNo || '-'}) ใช่หรือไม่?`)) {
+      setCurrentRecords(prev => prev.filter(r => r.id !== itemId));
+      try {
+        await fetch(`${API_URL}/warrants/${itemId}`, { method: 'DELETE' });
+      } catch (err) { console.error(err); }
+    }
+  };
+
+  const handleDownloadWordDoc = () => {
+    if (!formData.blackNo && !formData.targetName) {
+      alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
+      return;
+    }
+
+    let photosHtml = '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
+    if (formData.photos.length === 1) {
+      photosHtml = `<img src="${formData.photos[0]}" style="max-width: 100%; max-height: 380px; object-fit: contain;"/>`;
+    } else if (formData.photos.length > 1) {
+      let rowsHtml = '';
+      for (let i = 0; i < formData.photos.length; i += 2) {
+        const img1 = formData.photos[i];
+        const img2 = formData.photos[i + 1];
+        rowsHtml += `
+          <tr>
+            <td style="width: 50%; padding: 4px; text-align: center;"><img src="${img1}" style="max-width: 100%; max-height: 220px; object-fit: contain;"/></td>
+            <td style="width: 50%; padding: 4px; text-align: center;">${img2 ? `<img src="${img2}" style="max-width: 100%; max-height: 220px; object-fit: contain;"/>` : ''}</td>
+          </tr>
+        `;
+      }
+      photosHtml = `<table style="width: 100%; border-collapse: collapse;">${rowsHtml}</table>`;
+    }
+
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <title>บันทึกการปิดหมาย</title>
+        <style>
+          body { 
+            font-family: 'TH SarabunPSK', 'TH Sarabun New', Sarabun, sans-serif; 
+            font-size: 16pt; 
+            line-height: 1.2; 
+            margin-top: 1.5rem;
+            font-variant-numeric: lining-nums proportional-nums;
+            font-feature-settings: "thai" 0, "tnum" 1;
+          }
+          .center { text-align: center; }
+          .right { text-align: right; }
+          .bold { font-weight: bold; }
+          .title { font-size: 20pt; font-weight: bold; text-align: center; margin-bottom: 10px; }
+          .underline-dot { border-bottom: 1px dotted #000; padding: 0 5px; font-weight: bold; }
+          img { max-width: 100%; height: auto; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="title">บันทึกการปิดหมาย / คำบังคับ</div>
+        <div class="right">
+          <div class="bold" style="font-size: 18pt;">[ศาลจังหวัดสุรินทร์]</div>
+          <div>คดีหมายเลขดำที่ <span class="underline-dot">${formData.blackNo || "........................"}</span></div>
+          <div>คดีหมายเลขแดงที่ <span class="underline-dot">${formData.redNo || "........................"}</span></div>
+        </div>
+        <br/>
+        <div>เขียนที่ บ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span></div>
+        <div>วันที่ <span class="underline-dot">${formatThaiDate(formData.sendDate)}</span></div>
+        <br/>
+        <div>วันนี้เวลาประมาณ <span class="underline-dot">${formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span class="underline-dot">${formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span class="underline-dot">${formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
+        <br/>
+        <div>ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span class="underline-dot">${formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+        <br/>
+        <div class="center bold" style="font-size: 18pt;">จึงบันทึกไว้เป็นหลักฐาน</div>
+        <br/>
+        <div class="right">
+          <div class="center" style="display: inline-block; width: 300px;">
+            <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
+            <div class="bold">(${currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
+          </div>
+        </div>
+        <br/>
+        <div class="center bold">ลักษณะบ้าน <span class="underline-dot">${formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
+        <br/>
+        <div class="center" style="margin-top: 15px;">
+          <div class="bold" style="font-size: 14pt; margin-bottom: 8px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
+          ${photosHtml}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `รายงานปิดหมาย_${formData.blackNo || 'คดี'}_${formData.targetName || 'จำเลย'}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleConfirmBatchPrint = () => {
+    setShowPrintModal(false);
+    setPrintMode('batch');
+    setTimeout(() => window.print(), 200);
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: usernameInput, password: passwordInput })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsLoggedIn(true);
+        setCurrentUser(data.user);
+        localStorage.setItem('srnc_court_user', JSON.stringify(data.user));
+        setLoginError('');
+        setPasswordInput('');
+        setActiveTab('warrantForm');
+        setFormData({ ...initialFormState, sendDate: todayStr, sendTime: getCurrentTimeStr() });
+      } else {
+        setLoginError(data.message);
+      }
+    } catch (err) {
+      setLoginError('ไม่สามารถเชื่อมต่อ Server ได้');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('srnc_court_user');
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    if (!newUser.username || !newUser.password || !newUser.fullName || !newUser.position) return alert("กรอกข้อมูลผู้ใช้งานให้ครบถ้วน");
+
+    try {
+      const res = await fetch(`${API_URL}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchUsers();
+        setNewUser({ username: '', password: '', fullName: '', position: '', role: 'user' });
+        alert("เพิ่มผู้ใช้งานเรียบร้อยแล้ว!");
+      } else {
+        alert(data.message);
+      }
+    } catch (e) { alert("เกิดข้อผิดพลาดในการสร้างผู้ใช้"); }
+  };
+
+  const handleSaveEditUser = async (id) => {
+    await fetch(`${API_URL}/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editUserData)
+    });
+    fetchUsers();
+    setEditingUserId(null);
+    alert("อัปเดตข้อมูลผู้ใช้งานเรียบร้อยแล้ว");
+  };
+
+  const handleDeleteUser = async (id, targetName) => {
+    if (window.confirm(`คุณต้องการลบบัญชีผู้ใช้ "${targetName}" ใช่หรือไม่?`)) {
+      await fetch(`${API_URL}/users/${id}`, { method: 'DELETE' });
+      fetchUsers();
+    }
+  };
+
+  const handleExportAuditLogsCSV = () => {
+    if (filteredAuditLogs.length === 0) return alert("ไม่มีข้อมูล Log ที่จะส่งออก");
+    
+    let csvContent = "\uFEFFเวลา,ผู้ใช้งาน,Username,กิจกรรม (Action),รายละเอียด\n";
+    filteredAuditLogs.forEach(log => {
+      const safeDetails = `"${(log.details || '').replace(/"/g, '""')}"`;
+      csvContent += `${log.timestamp},${log.fullName},${log.username},${log.action},${safeDetails}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Audit_Logs_Report_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleClearOldLogs = async () => {
+    if (window.confirm("คุณต้องการลบประวัติการใช้งาน (Audit Logs) ที่เก่ากว่า 30 วันใช่หรือไม่?")) {
+      try {
+        await fetch(`${API_URL}/audit-logs/clear-old`, { method: 'DELETE' });
+        fetchAuditLogs();
+        alert("ลบประวัติการใช้งานเก่าเรียบร้อยแล้ว");
+      } catch (e) { alert("ไม่สามารถลบข้อมูล Log ได้"); }
+    }
+  };
+
+  const getGroupedArchive = () => {
+    const archive = {};
+    const monthNames = [
+      "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+      "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ];
+
+    currentRecords.forEach(rec => {
+      const dateStr = rec.sendDate || (rec.createdAt ? rec.createdAt.split('T')[0] : todayStr);
+      if (!dateStr) return;
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        let rawYear = parseInt(parts[0], 10);
+        if (isNaN(rawYear)) return;
+        const yearBE = (rawYear < 2500 ? rawYear + 543 : rawYear).toString();
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const monthName = monthNames[monthIdx] || parts[1];
+        const day = parseInt(parts[2], 10).toString();
+
+        if (!archive[yearBE]) archive[yearBE] = {};
+        if (!archive[yearBE][monthName]) archive[yearBE][monthName] = {};
+        if (!archive[yearBE][monthName][day]) archive[yearBE][monthName][day] = [];
+
+        archive[yearBE][monthName][day].push(rec);
+      }
+    });
+
+    return archive;
+  };
+
+  const archivedData = getGroupedArchive();
+
+  const pendingRecords = currentRecords.filter(r => !r.isSaved);
+  const allCompletedRecords = currentRecords.filter(r => r.isSaved);
+
+  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : allCompletedRecords;
+  
+  if (searchQuery.trim() !== '') {
+    const q = searchQuery.toLowerCase().trim();
+    displayedRecords = currentRecords.filter(r => 
+      (r.blackNo && r.blackNo.toLowerCase().includes(q)) ||
+      (r.redNo && r.redNo.toLowerCase().includes(q)) ||
+      (r.targetName && r.targetName.toLowerCase().includes(q)) ||
+      (r.warrantType && r.warrantType.toLowerCase().includes(q))
+    );
+  }
+
+  const filteredAuditLogs = auditLogs.filter(log => {
+    const matchesUser = selectedUserFilter === 'ALL' || log.username === selectedUserFilter;
+    const q = logSearchQuery.toLowerCase().trim();
+    const matchesQuery = q === '' ||
+      (log.fullName && log.fullName.toLowerCase().includes(q)) ||
+      (log.username && log.username.toLowerCase().includes(q)) ||
+      (log.action && log.action.toLowerCase().includes(q)) ||
+      (log.details && log.details.toLowerCase().includes(q));
+    
+    return matchesUser && matchesQuery;
+  });
+
+  const recordsToBatchPrint = selectedPrintDate === 'ALL'
+    ? allCompletedRecords
+    : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-amber-950 to-gray-900 flex items-center justify-center p-4 font-sans">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-yellow-500/30">
+          <div className="bg-gray-900 text-center p-6 border-b-4 border-yellow-500 flex flex-col items-center">
+            <img src="/srnc-picture.png" alt="ตราศาล" className="w-24 h-24 object-contain mb-3 drop-shadow-md" onError={(e) => e.target.src = "/srncpicture.png"} />
+            <h1 className="text-xl font-extrabold text-yellow-400 tracking-wide">ศาลจังหวัดสุรินทร์</h1>
+            <p className="text-xs text-gray-300 mt-1">ระบบงานบันทึกและติดตามการส่งหมายศาลอิเล็กทรอนิกส์ (Server Online)</p>
+          </div>
+          <div className="p-6 md:p-8 space-y-6">
+            <div className="text-center">
+              <h2 className="text-lg font-bold text-gray-800 flex items-center justify-center gap-2"><Lock className="w-5 h-5 text-amber-800" /> เข้าสู่ระบบใช้งาน</h2>
+              <p className="text-xs text-gray-500 mt-1">กรุณากรอก Username และ Password เพื่อยืนยันตัวตน</p>
+            </div>
+            {loginError && <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2.5 rounded-lg text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4 flex-shrink-0" /><span>{loginError}</span></div>}
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Username</label>
+                <div className="relative"><User className="w-4 h-4 text-gray-400 absolute left-3 top-3" /><input type="text" required value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none" placeholder="ป้อนชื่อผู้ใช้งาน" /></div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Password</label>
+                <div className="relative"><Lock className="w-4 h-4 text-gray-400 absolute left-3 top-3" /><input type="password" required value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none" placeholder="ป้อนรหัสผ่าน" /></div>
+              </div>
+              <button type="submit" className="w-full bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white font-bold py-3 rounded-xl shadow-lg transition duration-200 text-sm flex items-center justify-center gap-2"><CheckCircle2 className="w-4 h-4" /> เข้าสู่ระบบ</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 font-sans pb-12">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=TH+SarabunPSK:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+        
+        .sarabun-font {
+          font-family: 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif !important;
+          font-size: 16pt !important;
+          line-height: 1.15 !important;
+          font-variant-numeric: lining-nums proportional-nums !important;
+          font-feature-settings: "thai" 0, "tnum" 1 !important;
+        }
+
+        .dot-underline {
+          border-bottom: 1px dotted #000;
+          display: inline-block;
+          padding: 0 4px;
+        }
+
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0.6cm 1.0cm 0.3cm 1.0cm !important;
+          }
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+            background-color: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          * {
+            border-left: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+            font-variant-numeric: lining-nums proportional-nums !important;
+            font-feature-settings: "thai" 0, "tnum" 1 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-area {
+            display: block !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding-top: 0.8rem !important;
+            border: none !important;
+            font-variant-numeric: lining-nums proportional-nums !important;
+            font-feature-settings: "thai" 0, "tnum" 1 !important;
+          }
+          .page-single {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            height: auto !important;
+            max-height: 275mm !important;
+            overflow: hidden !important;
+          }
+          .page-batch {
+            page-break-after: always !important;
+            break-after: page !important;
+            height: auto !important;
+            max-height: 275mm !important;
+            overflow: hidden !important;
+          }
+        }
+      `}</style>
+
+      {/* Header Bar */}
+      <div className="bg-gray-900 text-yellow-400 px-6 py-3 flex justify-between items-center border-b-4 border-yellow-500 shadow-md no-print">
+        <div className="flex items-center gap-3">
+          <img src="/srnc-picture.png" alt="ตราศาล" className="w-8 h-8 object-contain" onError={(e) => e.target.src = "/srncpicture.png"} />
+          <span className="font-bold text-lg tracking-wide text-white">ระบบงานศาลยุติธรรมอิเล็กทรอนิกส์</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-3 bg-gray-800 px-4 py-1.5 rounded-full border border-gray-700 text-left">
+            <User className="w-4 h-4 text-yellow-400" />
+            <div>
+              <span className="text-xs font-bold text-white block">{currentUser?.fullName} ({currentUser?.username})</span>
+              <span className="text-[10px] text-yellow-300 block">{currentUser?.position} ({currentUser?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'})</span>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white px-3 py-1.5 rounded-lg border border-red-500/30 text-xs flex items-center gap-1.5 transition"><LogOut className="w-3.5 h-3.5" /> ออกจากระบบ</button>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto mt-6 px-4 space-y-6">
+        
+        {/* Banner + Tabs */}
+        <div className="bg-gradient-to-r from-gray-900 via-amber-950 to-gray-900 text-white p-6 rounded-t-2xl shadow-xl border-b border-yellow-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print">
+          <div className="flex items-center gap-4">
+            <img src="/srnc-picture.png" alt="ตราศาล" className="w-12 h-12 object-contain drop-shadow" onError={(e) => e.target.src = "/srncpicture.png"} />
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-yellow-400 flex items-center gap-2">ระบบบันทึกและติดตามการส่งหมายศาล</h1>
+              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Database Sync Online</span></p>
+            </div>
+          </div>
+
+          <div className="flex bg-gray-800 p-1 rounded-xl border border-gray-700 w-full md:w-auto">
+            <button
+              onClick={() => setActiveTab('warrantForm')}
+              className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${
+                activeTab === 'warrantForm' ? 'bg-amber-800 text-white shadow' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <FileText className="w-4 h-4" /> ฟอร์มบันทึกหมาย
+            </button>
+            {currentUser?.role === 'admin' && (
+              <>
+                <button
+                  onClick={() => setActiveTab('auditLogs')}
+                  className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${
+                    activeTab === 'auditLogs' ? 'bg-amber-800 text-white shadow' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <FileSearch className="w-4 h-4" /> Audit Log ({auditLogs.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('userManagement')}
+                  className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${
+                    activeTab === 'userManagement' ? 'bg-amber-800 text-white shadow' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Users className="w-4 h-4" /> จัดการผู้ใช้งาน ({users.length})
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* TAB 1: ฟอร์มบันทึกหมายศาล */}
+        {activeTab === 'warrantForm' && (
+          <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-8 no-print">
+            
+            <div className="bg-amber-50/60 border border-amber-300 rounded-xl p-5 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-amber-200">
+                <div className="flex items-center gap-2 font-bold text-amber-900 text-base">
+                  <FileSpreadsheet className="w-5 h-5 text-amber-800" />
+                  <span>จัดการข้อมูลหมายคดี - บัญชี {currentUser?.fullName} ({currentUser?.username})</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowArchiveModal(true);
+                      setSelectedYear(null);
+                      setSelectedMonth(null);
+                      setSelectedDate(null);
+                    }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
+                    title="เปิดดูข้อมูลย้อนหลังแบบแยกโฟลเดอร์ วัน/เดือน/ปี"
+                  >
+                    <Folder className="w-4 h-4" /> คลังโฟลเดอร์ย้อนหลัง
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearFormForManualInput}
+                    className="bg-sky-700 hover:bg-sky-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                  >
+                    <FilePlus className="w-4 h-4" /> กรอกข้อมูลเอง (ล้างฟอร์มใหม่)
+                  </button>
+
+                  <label className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition">
+                    <Upload className="w-4 h-4" /> เลือกไฟล์ Excel บัญชีหมายศาล
+                    <input type="file" accept=".xls,.xlsx" onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div className="relative w-full md:w-72">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="พิมพ์ค้นหาเลขดำ, เลขแดง, ชื่อ..."
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 text-xs">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex bg-amber-200/60 p-1 rounded-lg gap-1 border border-amber-300 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setExcelFilterStatus('pending')}
+                    className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                      excelFilterStatus === 'pending' && !searchQuery ? 'bg-amber-800 text-white shadow' : 'text-amber-900 hover:bg-amber-300/60'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" /> รอดำเนินการ ({pendingRecords.length})
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setExcelFilterStatus('completed')}
+                    className={`px-3 py-1 rounded-md font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                      excelFilterStatus === 'completed' && !searchQuery ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-amber-300/60'
+                    }`}
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({allCompletedRecords.length})
+                  </button>
+                </div>
+              </div>
+
+              {displayedRecords.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-56 overflow-y-auto pr-1">
+                  {displayedRecords.map((item) => (
+                    <div key={item.id} className={`p-3 rounded-lg border flex justify-between items-center transition ${
+                      formData.selectedRecordId === item.id ? 'bg-amber-100 border-amber-500 shadow-sm' : 'bg-white border-amber-200 hover:border-amber-400'
+                    }`}>
+                      <div className="text-xs space-y-1">
+                        <div className="font-bold text-gray-800 flex items-center gap-1.5">
+                          <span>ดำ: <span className="text-amber-800 font-mono">{item.blackNo}</span> | แดง: <span className="text-amber-800 font-mono">{item.redNo || '-'}</span></span>
+                          {item.isSaved && <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold">รายงานแล้ว</span>}
+                        </div>
+                        <div className="text-gray-600">ถึง: <span className="font-bold text-gray-900">{item.targetName}</span></div>
+                        <div className="text-gray-500">{item.warrantType} | อ.{item.district || '-'}</div>
+                      </div>
+                      
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteWarrantRecord(item.id, item.blackNo, item.targetName)}
+                          className="bg-red-100 hover:bg-red-600 text-red-700 hover:text-white p-1.5 rounded-lg text-xs font-bold transition"
+                          title="ลบรายการคดีนี้"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectExcelData(item)}
+                          className="bg-amber-800 hover:bg-amber-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition cursor-pointer"
+                        >
+                          {item.isSaved ? 'เรียกดู/แก้ไข' : 'เลือกนำเข้า'} <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 bg-white rounded-lg border border-dashed border-amber-300 text-xs text-gray-500">
+                  ยังไม่มีรายการคดีในบัญชีของ <span className="font-bold text-amber-900">{currentUser?.fullName}</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveFormData} className="space-y-8">
+              {/* Section 1 */}
+              <div>
+                <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4">
+                  <FileText className="w-5 h-5 text-amber-800" />
+                  <span>1. ข้อมูลคดีและรายละเอียดหมาย</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">เลขดำที่</label>
+                    <input type="text" value={formData.blackNo} onChange={(e) => setFormData({...formData, blackNo: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น พ431/2566" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">เลขแดงที่</label>
+                    <input type="text" value={formData.redNo} onChange={(e) => setFormData({...formData, redNo: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น พ1112/2566" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">หมายอะไร</label>
+                    <input type="text" value={formData.warrantType} onChange={(e) => setFormData({...formData, warrantType: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น หมายนัด" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">ราคา/ค่านำส่ง (บาท)</label>
+                    <input type="number" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-semibold text-green-700" placeholder="0.00" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2 */}
+              <div>
+                <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4">
+                  <User className="w-5 h-5 text-amber-800" />
+                  <span>2. รายละเอียดผู้รับหมายและสถานที่นำส่ง</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">หมายถึงใคร (ชื่อ-นามสกุล)</label>
+                    <input type="text" value={formData.targetName} onChange={(e) => setFormData({...formData, targetName: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น นายทอง สุขจิตร ที่1" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-800 uppercase mb-1">วันที่ส่งหมาย</label>
+                    <input type="date" value={formData.sendDate} onChange={(e) => setFormData({...formData, sendDate: e.target.value})} className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-medium" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-800 uppercase mb-1 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-800" /> เวลาที่ส่งหมาย (น.)
+                    </label>
+                    <input 
+                      type="text" 
+                      value={formData.sendTime} 
+                      onChange={(e) => setFormData({...formData, sendTime: e.target.value})} 
+                      className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-bold font-mono" 
+                      placeholder="เช่น 18:12"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">ที่อยู่ / บ้านเลขที่ / ถนน / หมู่บ้าน</label>
+                    <textarea rows="2" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800" placeholder="เช่น 127 ม. 5 ซ. - ถ. -"></textarea>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 md:col-span-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">อำเภอ</label>
+                      <input
+                        type="text"
+                        value={formData.district || ''}
+                        onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-bold text-xs"
+                        placeholder="เช่น เมืองสุรินทร์"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">ตำบล</label>
+                      <input
+                        type="text"
+                        value={formData.subdistrict || ''}
+                        onChange={(e) => setFormData({ ...formData, subdistrict: e.target.value })}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-bold text-xs"
+                        placeholder="เช่น ในเมือง"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">จังหวัด</label>
+                      <input
+                        type="text"
+                        value={formData.province || 'สุรินทร์'}
+                        onChange={(e) => setFormData({ ...formData, province: e.target.value })}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-bold text-xs"
+                        placeholder="สุรินทร์"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">รหัสไปรษณีย์</label>
+                      <input
+                        type="text"
+                        value={formData.zipcode || ''}
+                        onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 text-gray-800 font-mono font-bold text-xs"
+                        placeholder="32000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-3 bg-amber-50/40 p-4 rounded-xl border border-amber-200 space-y-2">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                      <label className="text-xs font-bold text-amber-900 uppercase flex items-center gap-1">
+                        <CheckSquare className="w-4 h-4 text-amber-800" /> ผลการส่งหมาย (เลือกหรือพิมพ์ระบุเพิ่มเติม)
+                      </label>
+                      
+                      <select
+                        onChange={handleSelectWarrantResult}
+                        value={formData.warrantResult}
+                        className="bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-amber-900 font-bold focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="" disabled>-- คลิกเลือกข้อความผลการส่งหมายมาตรฐาน --</option>
+                        {warrantResultOptions.map((opt, idx) => (
+                          <option key={idx} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <textarea
+                      rows="2"
+                      value={formData.warrantResult}
+                      onChange={(e) => setFormData({ ...formData, warrantResult: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-sm text-gray-800 font-medium"
+                      placeholder="ระบุผลการส่งหมาย..."
+                    ></textarea>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Section 3 */}
+              <div>
+                <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4">
+                  <Image className="w-5 h-5 text-amber-800" />
+                  <span>3. หลักฐานรูปถ่ายสถานที่ส่งหมาย</span>
+                </div>
+
+                <div className="p-5 bg-gray-50 border border-gray-200 rounded-xl flex flex-col justify-between shadow-sm space-y-4">
+                  <div className="text-center">
+                    <span className="font-bold text-base text-gray-800 block">ภาพถ่ายสถานที่ส่ง</span>
+                    <span className="text-xs text-gray-500">รองรับการเลือกอัปโหลดพร้อมกันหลายภาพ (หน้าบ้าน/ผู้รับหมาย)</span>
+                  </div>
+
+                  <label className="w-full max-w-md mx-auto bg-green-700 hover:bg-green-800 text-white py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 shadow cursor-pointer transition">
+                    <Image className="w-4 h-4" /> เลือกรูปถ่ายสถานที่ (อัปโหลดพร้อมกันได้หลายรูป)
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageChange} 
+                      className="hidden" 
+                      multiple 
+                    />
+                  </label>
+
+                  {formData.photos.length > 0 ? (
+                    <div className="mt-4 space-y-2">
+                      <div className="flex justify-between items-center text-xs text-gray-600 font-bold">
+                        <span>รูปถ่ายที่เลือกแล้ว ({formData.photos.length} รูป):</span>
+                        <button 
+                          type="button" 
+                          onClick={() => setFormData(prev => ({ ...prev, photos: [] }))} 
+                          className="text-red-500 hover:underline text-[10px]"
+                        >
+                          ล้างทั้งหมด
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                        {formData.photos.map((imgUrl, idx) => (
+                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-300 aspect-square shadow-sm">
+                            <img src={imgUrl} alt={`สถานที่ส่ง ${idx + 1}`} className="w-full h-full object-cover" />
+                            <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
+                              รูปที่ {idx + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePhoto(idx)}
+                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition"
+                              title="ลบรูปนี้"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="mt-3 text-xs text-gray-400 text-center block">ยังไม่ได้เลือกรูปถ่าย</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200 flex flex-col md:flex-row gap-3">
+                <button 
+                  type="submit" 
+                  className="flex-1 bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition"
+                >
+                  <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={handleDownloadWordDoc}
+                  className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-blue-500"
+                  title="ดาวน์โหลดแบบฟอร์มเพื่อแก้ไขใน Microsoft Word"
+                >
+                  <FileDown className="w-4 h-4" /> ดาวน์โหลดเอกสาร (Word)
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setPrintMode('single');
+                    setTimeout(() => window.print(), 150);
+                  }} 
+                  className="bg-gray-800 hover:bg-gray-900 text-yellow-400 px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-yellow-500"
+                >
+                  <Printer className="w-4 h-4" /> พิมพ์รายงาน (PDF)
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (allCompletedRecords.length === 0) {
+                      alert("ยังไม่มีรายการคดีที่บันทึกรายงานผลเข้าระบบ");
+                      return;
+                    }
+                    setShowPrintModal(true);
+                  }} 
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600"
+                >
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({allCompletedRecords.length})
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Modal คลังโฟลเดอร์ย้อนหลัง */}
+        {showArchiveModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 no-print">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] border border-amber-300">
+              
+              {/* Header */}
+              <div className="bg-slate-900 text-white p-4 flex justify-between items-center border-b-2 border-amber-500">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-yellow-400">
+                  <Folder className="w-5 h-5 text-yellow-400" /> คลังจัดเก็บข้อมูลย้อนหลัง (แยกตามวัน/เดือน/ปี)
+                </h3>
+                <button 
+                  onClick={() => setShowArchiveModal(false)}
+                  className="text-gray-400 hover:text-white text-xl font-bold px-2 cursor-pointer"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Breadcrumb Navigation */}
+              <div className="bg-slate-100 px-6 py-3 border-b text-sm flex items-center gap-2 font-medium text-slate-700">
+                <span 
+                  className="cursor-pointer hover:underline text-blue-600 font-bold flex items-center gap-1"
+                  onClick={() => { setSelectedYear(null); setSelectedMonth(null); setSelectedDate(null); }}
+                >
+                  <Folder className="w-4 h-4 text-amber-600" /> คลังหลัก (ปี พ.ศ.)
+                </span>
+                {selectedYear && (
+                  <>
+                    <span>/</span>
+                    <span 
+                      className="cursor-pointer hover:underline text-blue-600 font-bold"
+                      onClick={() => { setSelectedMonth(null); setSelectedDate(null); }}
+                    >
+                      พ.ศ. {selectedYear}
+                    </span>
+                  </>
+                )}
+                {selectedMonth && (
+                  <>
+                    <span>/</span>
+                    <span 
+                      className="cursor-pointer hover:underline text-blue-600 font-bold"
+                      onClick={() => setSelectedDate(null)}
+                    >
+                      {selectedMonth}
+                    </span>
+                  </>
+                )}
+                {selectedDate && (
+                  <>
+                    <span>/</span>
+                    <span className="text-amber-700 font-bold">วันที่ {selectedDate}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Content Area */}
+              <div className="p-6 overflow-y-auto flex-1">
+                {!selectedYear && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">เลือกปี พ.ศ. ที่ต้องการเข้าดูข้อมูล:</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {Object.keys(archivedData).length === 0 ? (
+                        <p className="text-gray-400 col-span-full text-center py-12 italic">ยังไม่มีข้อมูลในคลังจัดเก็บย้อนหลัง</p>
+                      ) : (
+                        Object.keys(archivedData).map((year) => (
+                          <button
+                            key={year}
+                            onClick={() => setSelectedYear(year)}
+                            className="flex flex-col items-center justify-center p-6 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl transition shadow-sm group cursor-pointer"
+                          >
+                            <Folder className="w-12 h-12 text-amber-600 group-hover:scale-110 transition mb-2" />
+                            <span className="font-bold text-amber-950 text-base">ปี พ.ศ. {year}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {selectedYear && !selectedMonth && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">เลือกเดือน (ปี พ.ศ. {selectedYear}):</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {Object.keys(archivedData[selectedYear] || {}).map((month) => (
+                        <button
+                          key={month}
+                          onClick={() => setSelectedMonth(month)}
+                          className="flex items-center gap-4 p-4 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-xl transition shadow-sm group cursor-pointer"
+                        >
+                          <Folder className="w-10 h-10 text-blue-600 group-hover:scale-110 transition" />
+                          <div className="text-left">
+                            <p className="font-bold text-blue-950 text-sm">{month}</p>
+                            <p className="text-xs text-blue-700">
+                              {Object.keys(archivedData[selectedYear][month]).length} วันที่มีบันทึก
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedYear && selectedMonth && !selectedDate && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+                      เลือกวันที่ ({selectedMonth} {selectedYear}):
+                    </h4>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                      {Object.keys(archivedData[selectedYear][selectedMonth] || {}).map((day) => (
+                        <button
+                          key={day}
+                          onClick={() => setSelectedDate(day)}
+                          className="flex flex-col items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition shadow-sm group cursor-pointer"
+                        >
+                          <Folder className="w-8 h-8 text-emerald-600 group-hover:scale-110 transition mb-1" />
+                          <span className="font-bold text-emerald-950 text-sm">วันที่ {day}</span>
+                          <span className="text-[10px] text-emerald-700 font-bold mt-0.5">
+                            {archivedData[selectedYear][selectedMonth][day].length} รายการ
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedYear && selectedMonth && selectedDate && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                      รายการหมายศาลวันที่ {selectedDate} {selectedMonth} {selectedYear}:
+                    </h4>
+                    <div className="space-y-3">
+                      {archivedData[selectedYear][selectedMonth][selectedDate].map((rec, index) => (
+                        <div key={rec.id || index} className="p-4 border border-gray-200 rounded-xl bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm hover:border-amber-400 transition">
+                          <div className="space-y-1">
+                            <div className="font-bold text-slate-800 text-sm">
+                              คดีดำ: <span className="text-amber-800 font-mono">{rec.blackNo || '-'}</span> | คดีแดง: <span className="text-amber-800 font-mono">{rec.redNo || '-'}</span>
+                              {rec.isSaved && <span className="ml-2 text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold">รายงานแล้ว</span>}
+                            </div>
+                            <div className="text-xs text-slate-700">
+                              หมายถึง: <strong className="text-slate-900">{rec.targetName || '-'}</strong> | ประเภท: {rec.warrantType || '-'}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              ที่อยู่: {rec.address} {rec.subdistrict} {rec.district} {rec.province}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectExcelData(rec);
+                                setShowArchiveModal(false);
+                              }}
+                              className="bg-amber-800 hover:bg-amber-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow transition cursor-pointer"
+                            >
+                              เรียกดู/แก้ไข <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteWarrantRecord(rec.id, rec.blackNo, rec.targetName)}
+                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow transition cursor-pointer"
+                              title="ลบรายการนี้ออกจากระบบ"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> ลบ
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 p-4 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
+                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Turso Cloud ถาวร</span>
+                <button
+                  onClick={() => setShowArchiveModal(false)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg transition font-bold cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* Modal เลือกวันที่พิมพ์ */}
+        {showPrintModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 no-print">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-amber-300 space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-200 pb-3">
+                <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-emerald-700" /> เลือกวันที่ต้องการพิมพ์รายงานทั้งหมด
+                </h3>
+                <button onClick={() => setShowPrintModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-gray-700 uppercase">กรองตามวันที่ส่งหมาย:</label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={selectedPrintDate === 'ALL' ? '' : selectedPrintDate}
+                    onChange={(e) => setSelectedPrintDate(e.target.value)}
+                    className="flex-1 p-2 bg-amber-50/50 border border-amber-300 rounded-lg text-sm text-gray-800 font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPrintDate('ALL')}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition ${
+                      selectedPrintDate === 'ALL' ? 'bg-amber-800 text-white border-amber-800' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    พิมพ์ทุกวัน
+                  </button>
+                </div>
+
+                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+                  จะพิมพ์เฉพาะรายการที่บันทึกแล้ว จำนวน: <span className="font-bold text-emerald-700 text-sm">{recordsToBatchPrint.length}</span> รายการ
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPrintModal(false)}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 rounded-xl text-xs transition"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmBatchPrint}
+                  disabled={recordsToBatchPrint.length === 0}
+                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-1.5"
+                >
+                  <PrinterCheck className="w-4 h-4" /> ยืนยันพิมพ์ ({recordsToBatchPrint.length} คดี)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: AUDIT LOG */}
+        {activeTab === 'auditLogs' && currentUser?.role === 'admin' && (
+          <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-6 no-print">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-gray-200 pb-3">
+              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <FileSearch className="w-5 h-5 text-amber-800" /> บันทึกประวัติการใช้งานระบบ (Audit Logs)
+              </h2>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportAuditLogsCSV}
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                  title="ส่งออกประวัติเป็นไฟล์ Excel / CSV"
+                >
+                  <Download className="w-4 h-4" /> ดาวน์โหลด Excel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearOldLogs}
+                  className="bg-red-700 hover:bg-red-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                  title="ลบ Log เก่าที่เกิน 30 วันเพื่อประหยัดพื้นที่"
+                >
+                  <Trash2 className="w-4 h-4" /> ลบ Log เก่า (มากกว่า 30 วัน)
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs">
+              <div className="md:col-span-2 relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={logSearchQuery}
+                  onChange={(e) => setLogSearchQuery(e.target.value)}
+                  placeholder="ค้นหาชื่อผู้ใช้, กิจกรรม (Action), หรือรายละเอียดคดี..."
+                  className="w-full pl-9 pr-8 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                />
+                {logSearchQuery && (
+                  <button onClick={() => setLogSearchQuery('')} className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-amber-800 flex-shrink-0" />
+                <select
+                  value={selectedUserFilter}
+                  onChange={(e) => setSelectedUserFilter(e.target.value)}
+                  className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 font-bold focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                >
+                  <option value="ALL">-- แสดงผู้ใช้งานทั้งหมด --</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.username}>
+                      {u.fullName} ({u.username})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm max-h-96 overflow-y-auto">
+              <table className="w-full text-left text-xs text-gray-700">
+                <thead className="bg-gray-900 text-yellow-400 uppercase sticky top-0">
+                  <tr>
+                    <th className="p-3">เวลา</th>
+                    <th className="p-3">ผู้ใช้งาน</th>
+                    <th className="p-3">กิจกรรม (Action)</th>
+                    <th className="p-3">รายละเอียด (Details)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 font-mono">
+                  {filteredAuditLogs.length > 0 ? (
+                    filteredAuditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50 transition">
+                        <td className="p-3 text-gray-500 whitespace-nowrap">{log.timestamp}</td>
+                        <td className="p-3 font-bold text-amber-900 whitespace-nowrap">{log.fullName} ({log.username})</td>
+                        <td className="p-3 font-bold text-blue-800 whitespace-nowrap">{log.action}</td>
+                        <td className="p-3 text-gray-800">{log.details}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="p-6 text-center text-gray-400 italic">ไม่พบประวัติการใช้งานตามเงื่อนไขที่ค้นหา</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: USER MANAGEMENT */}
+        {activeTab === 'userManagement' && currentUser?.role === 'admin' && (
+          <div className="bg-white p-6 md:p-8 rounded-b-2xl shadow-xl space-y-8 no-print">
+            <div className="border border-amber-200 bg-amber-50/40 p-6 rounded-xl">
+              <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-amber-200 pb-2">
+                <UserPlus className="w-5 h-5 text-amber-800" /> เพิ่มผู้ใช้งานใหม่เข้าระบบ
+              </h2>
+              
+              <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                    placeholder="เช่น user01"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Password</label>
+                  <input
+                    type="text"
+                    required
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                    placeholder="รหัสผ่าน"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">ชื่อ - นามสกุล</label>
+                  <input
+                    type="text"
+                    required
+                    value={newUser.fullName}
+                    onChange={(e) => setNewUser({...newUser, fullName: e.target.value})}
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                    placeholder="เช่น นายรักชาติ ยิ่งชีพ"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">ตำแหน่ง</label>
+                  <input
+                    type="text"
+                    required
+                    value={newUser.position}
+                    onChange={(e) => setNewUser({...newUser, position: e.target.value})}
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                    placeholder="เช่น พนักงานเดินหมายศาล"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">ระดับสิทธิ์ (Role)</label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                  >
+                    <option value="user">ผู้ใช้งานทั่วไป (User)</option>
+                    <option value="admin">ผู้ดูแลระบบ (Admin)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-800 hover:bg-amber-900 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 shadow"
+                  >
+                    <Plus className="w-4 h-4" /> บันทึกสร้างผู้ใช้
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-200 pb-2">
+                <ListOrdered className="w-5 h-5 text-amber-800" /> รายชื่อผู้ใช้งานในระบบทั้งหมด ({users.length} คน)
+              </h2>
+
+              <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
+                <table className="w-full text-left text-sm text-gray-700">
+                  <thead className="bg-gray-900 text-yellow-400 uppercase text-xs">
+                    <tr>
+                      <th className="p-3">#</th>
+                      <th className="p-3">Username</th>
+                      <th className="p-3">Password</th>
+                      <th className="p-3">ชื่อ - นามสกุล</th>
+                      <th className="p-3">ตำแหน่ง</th>
+                      <th className="p-3">สิทธิ์ใช้งาน</th>
+                      <th className="p-3 text-center">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {users.map((u, index) => {
+                      const isEditing = editingUserId === u.id;
+
+                      return (
+                        <tr key={u.id} className={isEditing ? "bg-amber-50" : "hover:bg-gray-50 transition"}>
+                          <td className="p-3 font-semibold">{index + 1}</td>
+
+                          <td className="p-3 font-mono font-bold text-amber-900">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editUserData.username}
+                                onChange={(e) => setEditUserData({...editUserData, username: e.target.value})}
+                                className="w-full p-1 bg-white border border-gray-300 rounded text-xs"
+                              />
+                            ) : (
+                              u.username
+                            )}
+                          </td>
+
+                          <td className="p-3 text-gray-500 font-mono text-xs">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editUserData.password}
+                                onChange={(e) => setEditUserData({...editUserData, password: e.target.value})}
+                                className="w-full p-1 bg-white border border-gray-300 rounded text-xs"
+                              />
+                            ) : (
+                              "••••••"
+                            )}
+                          </td>
+
+                          <td className="p-3 font-medium text-gray-900">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editUserData.fullName}
+                                onChange={(e) => setEditUserData({...editUserData, fullName: e.target.value})}
+                                className="w-full p-1 bg-white border border-gray-300 rounded text-xs font-bold"
+                              />
+                            ) : (
+                              u.fullName
+                            )}
+                          </td>
+
+                          <td className="p-3 text-gray-600">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editUserData.position}
+                                onChange={(e) => setEditUserData({...editUserData, position: e.target.value})}
+                                className="w-full p-1 bg-white border border-gray-300 rounded text-xs"
+                              />
+                            ) : (
+                              u.position
+                            )}
+                          </td>
+
+                          <td className="p-3">
+                            {isEditing ? (
+                              <select
+                                value={editUserData.role}
+                                onChange={(e) => setEditUserData({...editUserData, role: e.target.value})}
+                                className="p-1 bg-white border border-gray-300 rounded text-xs"
+                              >
+                                <option value="user">ผู้ใช้งานทั่วไป</option>
+                                <option value="admin">ผู้ดูแลระบบ</option>
+                              </select>
+                            ) : (
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                                u.role === 'admin' 
+                                  ? 'bg-purple-100 text-purple-800 border-purple-300' 
+                                  : 'bg-blue-100 text-blue-800 border-blue-300'
+                              }`}>
+                                {u.role === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'ผู้ใช้งาน (User)'}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="p-3 text-center">
+                            {isEditing ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => handleSaveEditUser(u.id)}
+                                  className="text-emerald-700 hover:text-emerald-900 bg-emerald-100 p-1.5 rounded-lg transition"
+                                  title="บันทึก"
+                                >
+                                  <Save className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingUserId(null)}
+                                  className="text-gray-600 hover:text-gray-800 bg-gray-200 p-1.5 rounded-lg transition"
+                                  title="ยกเลิก"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => { setEditingUserId(u.id); setEditUserData({ ...u }); }}
+                                  className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-lg transition"
+                                  title="แก้ไขข้อมูล"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(u.id, u.fullName)}
+                                  className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded-lg transition"
+                                  title="ลบผู้ใช้งาน"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ==========================================
+            แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 สมบูรณ์
+            ========================================== */}
+        <div className="print-area hidden sarabun-font bg-white text-black max-w-2xl mx-auto">
+          {printMode === 'single' && (
+            <div className="page-single flex flex-col justify-between">
+              <div>
+                <div className="text-center font-bold text-xl mb-0.5">
+                  บันทึกการปิดหมาย / คำบังคับ
+                </div>
+
+                <div className="flex justify-end mb-0.5">
+                  <div className="w-72 space-y-0.5 text-right">
+                    <div className="font-bold text-lg text-center pr-4">[ศาลจังหวัดสุรินทร์]</div>
+                    <div>คดีหมายเลขดำที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{formData.blackNo || "........................"}</span></div>
+                    <div>คดีหมายเลขแดงที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{formData.redNo || "........................"}</span></div>
+                  </div>
+                </div>
+
+                <div className="space-y-0.5 text-justify pt-0.5">
+                  <div>
+                    เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span>
+                  </div>
+
+                  <div>
+                    วันที่ <span className="dot-underline font-bold">{formatThaiDate(formData.sendDate)}</span>
+                  </div>
+
+                  <div>
+                    วันนี้เวลาประมาณ <span className="dot-underline font-bold">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                  </div>
+
+                  <div>
+                    ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span> <br />
+                    ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล
+                  </div>
+
+                  <div className="text-center font-bold pt-0.5 text-lg">
+                    จึงบันทึกไว้เป็นหลักฐาน
+                  </div>
+
+                  <div className="flex flex-col items-end pt-0.5 space-y-0.5">
+                    <div className="text-center space-y-0.5">
+                      <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
+                      <div className="font-bold">({currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
+                    </div>
+                  </div>
+
+                  <div className="text-center font-bold text-base pt-0.5">
+                    ลักษณะบ้าน <span className="dot-underline font-bold">{formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* การแสดงผลรูปภาพในรายงาน PDF A4 */}
+              <div className="mt-1 space-y-1">
+                {formData.photos.length === 1 && (
+                  <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
+                    <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-80 object-contain mx-auto rounded-lg" />
+                  </div>
+                )}
+
+                {formData.photos.length > 1 && (
+                  <div className="grid grid-cols-2 gap-2 w-full max-h-96 overflow-hidden">
+                    {formData.photos.map((photo, pIdx) => (
+                      <div key={pIdx} className="w-full h-44 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
+                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="max-w-full max-h-44 object-contain rounded-lg" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {formData.photos.length === 0 && (
+                  <div className="w-full h-36 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                    [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          {printMode === 'batch' && (
+            <div>
+              {recordsToBatchPrint.map((item, idx) => (
+                <div key={item.id || idx} className="page-batch flex flex-col justify-between pt-1">
+                  <div>
+                    <div className="text-center font-bold text-xl mb-0.5">
+                      บันทึกการปิดหมาย / คำบังคับ
+                    </div>
+
+                    <div className="flex justify-end mb-0.5">
+                      <div className="w-72 space-y-0.5 text-right">
+                        <div className="font-bold text-lg text-center pr-4">[ศาลจังหวัดสุรินทร์]</div>
+                        <div>คดีหมายเลขดำที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{item.blackNo || "........................"}</span></div>
+                        <div>คดีหมายเลขแดงที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{item.redNo || "........................"}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-0.5 text-justify pt-0.5">
+                      <div>
+                        เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span>
+                      </div>
+
+                      <div>
+                        วันที่ <span className="dot-underline font-bold">{formatThaiDate(item.sendDate)}</span>
+                      </div>
+
+                      <div>
+                        วันนี้เวลาประมาณ <span className="dot-underline font-bold">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{item.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                      </div>
+
+                      <div>
+                        ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span> <br />
+                        ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล
+                      </div>
+
+                      <div className="text-center font-bold pt-0.5 text-lg">
+                        จึงบันทึกไว้เป็นหลักฐาน
+                      </div>
+
+                      <div className="flex flex-col items-end pt-0.5 space-y-0.5">
+                        <div className="text-center space-y-0.5">
+                          <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
+                          <div className="font-bold">({currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
+                        </div>
+                      </div>
+
+                      <div className="text-center font-bold text-base pt-0.5">
+                        ลักษณะบ้าน <span className="dot-underline font-bold">{item.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-1 space-y-1">
+                    {item.photos && item.photos.length === 1 && (
+                      <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
+                        <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-80 object-contain mx-auto rounded-lg" />
+                      </div>
+                    )}
+
+                    {item.photos && item.photos.length > 1 && (
+                      <div className="grid grid-cols-2 gap-2 w-full max-h-96 overflow-hidden">
+                        {item.photos.map((photo, pIdx) => (
+                          <div key={pIdx} className="w-full h-44 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
+                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="max-w-full max-h-44 object-contain rounded-lg" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {(!item.photos || item.photos.length === 0) && (
+                      <div className="w-full h-36 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                        [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}

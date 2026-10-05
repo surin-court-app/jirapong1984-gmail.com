@@ -1,0 +1,70 @@
+สำหรับการรันใช้งานโปรแกรม ระบบนำเข้าเอกสารบัญชีหมาย (สุรินทร์ คอร์ท) คุณสามารถเปิดใช้งานผ่าน Terminal ใน VS Code หรือ Command Prompt ได้ด้วยคำสั่งตามลำดับดังนี้ครับ:
+
+คำสั่งสั่งรันโปรแกรม (Development Mode)
+
+Bash
+npm run dev
+(เมื่อรันแล้ว ให้คลิกลิงก์ http://localhost:5173/ หรือสลับไปที่เบราว์เซอร์เพื่อเริ่มใช้งาน)
+
+หากต้องการหยุดการรันโปรแกรม
+
+กด Ctrl + C บนคีย์บอร์ดที่หน้าต่าง Terminal
+
+พิมพ์ y แล้วกด Enter
+
+กรณีเพิ่งย้ายเครื่อง หรือรันคำสั่งแรกแล้วขึ้น Error หาโมดูลไม่เจอ
+ให้ติดตั้งไลบรารีที่จำเป็นก่อนด้วยคำสั่ง:
+
+Bash
+npm install
+แล้วค่อยสั่ง npm run dev อีกครั้งครับ
+
+
+ขั้นตอนที่ 1: ตรวจสอบ/เพิ่ม electron-builder ในโปรเจกต์
+เปิด Terminal ในโฟลเดอร์โปรเจกต์ แล้วรันคำสั่งติดตั้งตัว Build (ทำเฉพาะครั้งแรก):
+
+Bash
+npm install electron-builder --save-dev
+ขั้นตอนที่ 2: ตั้งค่าไฟล์ package.json
+เปิดไฟล์ package.json แล้วตรวจสอบ/เพิ่มคอนฟิก build และสคริปต์ electron:build ดังนี้:
+
+ใช้อักขระ [LT] แทน < และ [GT] แทน >:
+
+Plaintext
+{
+  "name": "surin-court-print",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:build": "vite build && electron-builder"
+  },
+  "build": {
+    "appId": "com.surincourt.print",
+    "productName": "SurinCourtPrint",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SurinCourtPrint"
+    }
+  }
+}
+ขั้นตอนที่ 3: สั่ง รัน Build เพื่อสร้างไฟล์ Setup .exe
+เปิด Terminal ใน VS Code แล้วพิมพ์คำสั่งนี้:
+
+Bash
+npm run electron:build
