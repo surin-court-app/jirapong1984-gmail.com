@@ -107,11 +107,11 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ปรับแก้การดึงข้อมูลและแปลงสถานะ isSaved เป็น Boolean ที่ถูกต้อง
- const fetchUserWarrants = async (username) => {
+  // ✅ แก้ไขไวยากรณ์ Template Literal ให้ดึง API ได้ถูกต้อง 100%
+  const fetchUserWarrants = async (username) => {
     if (!username) return;
     try {
-      const res = await fetch(`\({API_URL}/warrants/\){username}`);
+      const res = await fetch(`${API_URL}/warrants/${username}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -131,7 +131,7 @@ export default function SurinCourtWarrantApp() {
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.username) {
       fetchUserWarrants(currentUser.username);
     }
   }, [currentUser]);
@@ -399,7 +399,6 @@ export default function SurinCourtWarrantApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: currentUser.username, records: recordPayload })
       });
-      // ดึงข้อมูลใหม่จาก Server เพื่อซิงก์สถานะทันที
       fetchUserWarrants(currentUser.username);
     } catch (err) { console.error(err); }
 
