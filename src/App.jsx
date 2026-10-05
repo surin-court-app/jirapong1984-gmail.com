@@ -348,6 +348,11 @@ export default function SurinCourtWarrantApp() {
           });
 
           if (res.ok) {
+            // อัปเดต State หน้าจอสดทันทีเพื่อให้ตัวเลขเด้งเป็น 36
+            setCurrentRecords(prev => {
+              const otherRecords = prev.filter(r => r.ownerUsername !== activeUsername);
+              return [...otherRecords, ...parsedRecords];
+            });
             await fetchUserWarrants(activeUsername);
             await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
             alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลซิงก์เข้า Turso Cloud สำเร็จ ${parsedRecords.length} รายการ`);
