@@ -39,7 +39,6 @@ const db = createClient({
         sendDate TEXT,
         sendTime TEXT,
         address TEXT,
-        village TEXT,
         subdistrict TEXT,
         district TEXT,
         province TEXT,
@@ -52,10 +51,6 @@ const db = createClient({
       )
     `);
 
-    try {
-      await db.execute(`ALTER TABLE warrants ADD COLUMN village TEXT`);
-    } catch (e) {}
-
     await db.execute(`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id TEXT PRIMARY KEY,
@@ -67,10 +62,6 @@ const db = createClient({
         details TEXT
       )
     `);
-
-    try {
-      await db.execute(`ALTER TABLE audit_logs ADD COLUMN user TEXT`);
-    } catch (e) {}
 
     const adminExists = await db.execute({
       sql: 'SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?)',
@@ -159,7 +150,7 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// ✅ ค้นหาหมายศาล ค้นหาแบบกว้างป้องกันชื่อพิมพ์เล็ก-ใหญ่ดึงไม่ขึ้น
+// ✅ ดึงข้อมูลหมายศาลของผู้ใช้งาน ค้นหาคลอบคลุมทั้งพิมพ์เล็กพิมพ์ใหญ่
 app.get('/api/warrants/:username', async (req, res) => {
   try {
     const targetUsername = (req.params.username || '').trim().toLowerCase();
@@ -179,7 +170,7 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
-// ✅ บันทึกคดีและรูปถ่ายอย่างปลอดภัย
+// ✅ บันทึกข้อมูลหมายศาลเข้า Turso DB ป้องกัน Error Conflict แบบ 100%
 app.post('/api/warrants/batch', async (req, res) => {
   try {
     const { username, records } = req.body;
@@ -196,9 +187,9 @@ app.post('/api/warrants/batch', async (req, res) => {
       await db.execute({
         sql: `INSERT INTO warrants (
           id, ownerUsername, blackNo, redNo, payer, warrantType, targetName,
-          sendDate, sendTime, address, village, subdistrict, district,
+          sendDate, sendTime, address, subdistrict, district,
           province, zipcode, warrantResult, price, gps, photos, isSaved
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           ownerUsername=excluded.ownerUsername,
           blackNo=excluded.blackNo,
@@ -209,7 +200,6 @@ app.post('/api/warrants/batch', async (req, res) => {
           sendDate=excluded.sendDate,
           sendTime=excluded.sendTime,
           address=excluded.address,
-          village=excluded.village,
           subdistrict=excluded.subdistrict,
           district=excluded.district,
           province=excluded.province,
@@ -230,7 +220,6 @@ app.post('/api/warrants/batch', async (req, res) => {
           rec.sendDate || '',
           rec.sendTime || '',
           rec.address || '',
-          rec.village || '',
           rec.subdistrict || '',
           rec.district || '',
           rec.province || 'สุรินทร์',
