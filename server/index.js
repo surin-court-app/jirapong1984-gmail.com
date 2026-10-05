@@ -54,9 +54,7 @@ const db = createClient({
 
     try {
       await db.execute(`ALTER TABLE warrants ADD COLUMN village TEXT`);
-    } catch (e) {
-      // ข้ามถ้ามีอยู่แล้ว
-    }
+    } catch (e) {}
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS audit_logs (
@@ -75,7 +73,7 @@ const db = createClient({
     } catch (e) {}
 
     const adminExists = await db.execute({
-      sql: 'SELECT * FROM users WHERE username = ?',
+      sql: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?)',
       args: ['admin']
     });
     if (adminExists.rows.length === 0) {
@@ -86,7 +84,7 @@ const db = createClient({
     }
 
     const userExists = await db.execute({
-      sql: 'SELECT * FROM users WHERE username = ?',
+      sql: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?)',
       args: ['tomsound']
     });
     if (userExists.rows.length === 0) {
@@ -103,9 +101,10 @@ const db = createClient({
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   try {
+    const cleanUser = (username || '').trim();
     const result = await db.execute({
-      sql: 'SELECT * FROM users WHERE username = ? AND password = ?',
-      args: [username, password]
+      sql: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND password = ?',
+      args: [cleanUser, password]
     });
     if (result.rows.length > 0) res.json({ success: true, user: result.rows[0] });
     else res.json({ success: false, message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
@@ -128,7 +127,7 @@ app.post('/api/users', async (req, res) => {
   try {
     await db.execute({
       sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
-      args: [username, password, fullName, position, role]
+      args: [(username || '').trim(), password, fullName, position, role]
     });
     res.json({ success: true });
   } catch (e) { res.json({ success: false, message: 'Username นี้มีในระบบแล้ว' }); }
@@ -140,7 +139,7 @@ app.put('/api/users/:id', async (req, res) => {
   try {
     await db.execute({
       sql: 'UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?',
-      args: [username, password, fullName, position, role, id]
+      args: [(username || '').trim(), password, fullName, position, role, id]
     });
     res.json({ success: true });
   } catch (e) {
@@ -160,15 +159,18 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
+// ✅ แก้ไข: ดึงข้อมูลหมายศาลโดยไม่สนตัวพิมพ์เล็ก-ใหญ่ (Case Insensitive)
 app.get('/api/warrants/:username', async (req, res) => {
   try {
+    const targetUsername = (req.params.username || '').trim();
     const result = await db.execute({
-      sql: 'SELECT * FROM warrants WHERE ownerUsername = ?',
-      args: [req.params.username]
+      sql: 'SELECT * FROM warrants WHERE LOWER(ownerUsername) = LOWER(?)',
+      args: [targetUsername]
     });
+    
     const parsed = result.rows.map(w => ({
       ...w,
-      isSaved: w.isSaved === 1 || w.isSaved === true || w.isSaved === "1",
+      isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1",
       photos: JSON.parse(w.photos || '[]')
     }));
     res.json(parsed);
@@ -177,13 +179,15 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
-// ✅ ปรับปรุง Batch Import ให้ประมวลผลผ่าน db.batch() ป้องกัน 503 Server Crash
+// ✅ แก้ไข: บันทึกข้อมูลโดยใช้อักษรตัวพิมพ์เล็กเสมอกันเพื่อความถูกต้องในการจับคู่
 app.post('/api/warrants/batch', async (req, res) => {
   try {
     const { username, records } = req.body;
     if (!username || !Array.isArray(records) || records.length === 0) {
       return res.json({ success: true });
     }
+
+    const cleanUsername = (username || '').trim();
 
     const statements = records.map(rec => {
       const params = [
@@ -220,8 +224,9 @@ app.post('/api/warrants/batch', async (req, res) => {
           sendDate=excluded.sendDate, sendTime=excluded.sendTime, address=excluded.address,
           village=excluded.village, subdistrict=excluded.subdistrict, district=excluded.district,
           province=excluded.province, zipcode=excluded.zipcode, warrantResult=excluded.warrantResult,
-          price=excluded.price, gps=excluded.gps, photos=excluded.photos, isSaved=excluded.isSaved`,
-        args: [...params, rec.id, username]
+          price=excluded.price, gps=excluded.gps, photos=excluded.photos, isSaved=excluded.isSaved,
+          ownerUsername=excluded.ownerUsername`,
+        args: [...params, rec.id, cleanUsername]
       };
     });
 
@@ -248,8 +253,8 @@ app.delete('/api/warrants/:id', async (req, res) => {
 app.delete('/api/warrants/owner/:username', async (req, res) => {
   try {
     await db.execute({
-      sql: 'DELETE FROM warrants WHERE ownerUsername = ?',
-      args: [req.params.username]
+      sql: 'DELETE FROM warrants WHERE LOWER(ownerUsername) = LOWER(?)',
+      args: [(req.params.username || '').trim()]
     });
     res.json({ success: true });
   } catch (e) {
@@ -277,7 +282,7 @@ app.post('/api/audit-logs', async (req, res) => {
   try {
     await db.execute({
       sql: 'INSERT INTO audit_logs (id, timestamp, username, fullName, user, action, details) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      args: [id, timestamp, username, nameToSave, nameToSave, action, details]
+      args: [id, timestamp, (username || '').trim(), nameToSave, nameToSave, action, details]
     });
     res.json({ success: true });
   } catch (e) {
