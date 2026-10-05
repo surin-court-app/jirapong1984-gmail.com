@@ -102,17 +102,25 @@ const db = createClient({
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  const result = await db.execute({
-    sql: 'SELECT * FROM users WHERE username = ? AND password = ?',
-    args: [username, password]
-  });
-  if (result.rows.length > 0) res.json({ success: true, user: result.rows[0] });
-  else res.json({ success: false, message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
+  try {
+    const result = await db.execute({
+      sql: 'SELECT * FROM users WHERE username = ? AND password = ?',
+      args: [username, password]
+    });
+    if (result.rows.length > 0) res.json({ success: true, user: result.rows[0] });
+    else res.json({ success: false, message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 app.get('/api/users', async (req, res) => {
-  const result = await db.execute('SELECT id, username, fullName, position, role FROM users');
-  res.json(result.rows);
+  try {
+    const result = await db.execute('SELECT id, username, fullName, position, role FROM users');
+    res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/users', async (req, res) => {
@@ -129,19 +137,27 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   const { id } = req.params;
   const { username, password, fullName, position, role } = req.body;
-  await db.execute({
-    sql: 'UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?',
-    args: [username, password, fullName, position, role, id]
-  });
-  res.json({ success: true });
+  try {
+    await db.execute({
+      sql: 'UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?',
+      args: [username, password, fullName, position, role, id]
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 app.delete('/api/users/:id', async (req, res) => {
-  await db.execute({
-    sql: 'DELETE FROM users WHERE id = ?',
-    args: [req.params.id]
-  });
-  res.json({ success: true });
+  try {
+    await db.execute({
+      sql: 'DELETE FROM users WHERE id = ?',
+      args: [req.params.id]
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 app.get('/api/warrants/:username', async (req, res) => {
@@ -161,15 +177,15 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
+// ✅ ปรับปรุง Batch Import ให้ประมวลผลผ่าน db.batch() ป้องกัน 503 Server Crash
 app.post('/api/warrants/batch', async (req, res) => {
   try {
     const { username, records } = req.body;
-    for (const rec of records) {
-      const existing = await db.execute({
-        sql: 'SELECT id FROM warrants WHERE id = ?',
-        args: [rec.id]
-      });
+    if (!username || !Array.isArray(records) || records.length === 0) {
+      return res.json({ success: true });
+    }
 
+    const statements = records.map(rec => {
       const params = [
         rec.blackNo || '',
         rec.redNo || '',
@@ -191,49 +207,54 @@ app.post('/api/warrants/batch', async (req, res) => {
         rec.isSaved ? 1 : 0
       ];
 
-      if (existing.rows.length > 0) {
-        await db.execute({
-          sql: `UPDATE warrants SET 
-            blackNo = ?, redNo = ?, payer = ?, warrantType = ?, targetName = ?,
-            sendDate = ?, sendTime = ?, address = ?, village = ?, subdistrict = ?, district = ?,
-            province = ?, zipcode = ?, warrantResult = ?, price = ?, gps = ?,
-            photos = ?, isSaved = ?
-            WHERE id = ?`,
-          args: [...params, rec.id]
-        });
-      } else {
-        await db.execute({
-          sql: `INSERT INTO warrants (
-            blackNo, redNo, payer, warrantType, targetName,
-            sendDate, sendTime, address, village, subdistrict, district,
-            province, zipcode, warrantResult, price, gps,
-            photos, isSaved, id, ownerUsername
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [...params, rec.id, username]
-        });
-      }
-    }
+      return {
+        sql: `INSERT INTO warrants (
+          blackNo, redNo, payer, warrantType, targetName,
+          sendDate, sendTime, address, village, subdistrict, district,
+          province, zipcode, warrantResult, price, gps,
+          photos, isSaved, id, ownerUsername
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          blackNo=excluded.blackNo, redNo=excluded.redNo, payer=excluded.payer,
+          warrantType=excluded.warrantType, targetName=excluded.targetName,
+          sendDate=excluded.sendDate, sendTime=excluded.sendTime, address=excluded.address,
+          village=excluded.village, subdistrict=excluded.subdistrict, district=excluded.district,
+          province=excluded.province, zipcode=excluded.zipcode, warrantResult=excluded.warrantResult,
+          price=excluded.price, gps=excluded.gps, photos=excluded.photos, isSaved=excluded.isSaved`,
+        args: [...params, rec.id, username]
+      };
+    });
+
+    await db.batch(statements, 'write');
     res.json({ success: true });
   } catch (err) {
-    console.error("Batch Error:", err);
+    console.error("Batch Import Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
 app.delete('/api/warrants/:id', async (req, res) => {
-  await db.execute({
-    sql: 'DELETE FROM warrants WHERE id = ?',
-    args: [req.params.id]
-  });
-  res.json({ success: true });
+  try {
+    await db.execute({
+      sql: 'DELETE FROM warrants WHERE id = ?',
+      args: [req.params.id]
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 app.delete('/api/warrants/owner/:username', async (req, res) => {
-  await db.execute({
-    sql: 'DELETE FROM warrants WHERE ownerUsername = ?',
-    args: [req.params.username]
-  });
-  res.json({ success: true });
+  try {
+    await db.execute({
+      sql: 'DELETE FROM warrants WHERE ownerUsername = ?',
+      args: [req.params.username]
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 app.get('/api/audit-logs', async (req, res) => {
