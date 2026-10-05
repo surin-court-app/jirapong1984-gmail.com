@@ -54,7 +54,7 @@ export default function SurinCourtWarrantApp() {
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ✅ แก้ไข: เริ่มต้นเป็นอาร์เรย์ว่างเสมอ เพื่อบังคับให้ดึงข้อมูลจาก Server ทุกอุปกรณ์
+  // ✅ บังคับเริ่มต้นเป็นอาร์เรย์ว่างเพื่อดึงข้อมูลตรงจาก Turso Cloud
   const [currentRecords, setCurrentRecords] = useState([]);
 
   const [currentBatchId, setCurrentBatchId] = useState(null);
@@ -261,6 +261,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ✅ อัปเดตฟังก์ชัน handleFileUpload ให้ส่งข้อมูลและซิงก์เข้า Turso Cloud สำเร็จ 100%
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser) return;
@@ -323,20 +324,25 @@ export default function SurinCourtWarrantApp() {
           }
 
           setCurrentBatchId(newBatchId);
-          setCurrentRecords(parsedRecords);
           setExcelFilterStatus('pending');
 
           try {
-            await fetch(`${API_URL}/warrants/batch`, {
+            const res = await fetch(`${API_URL}/warrants/batch`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ username: currentUser.username, records: parsedRecords })
             });
-            fetchUserWarrants(currentUser.username);
-          } catch (err) { console.error(err); }
-
-          await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลจำเลยทั้งหมด ${parsedRecords.length} รายการ`);
+            if (res.ok) {
+              await fetchUserWarrants(currentUser.username);
+              await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
+              alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลซิงก์เข้า Turso Cloud สำเร็จ ${parsedRecords.length} รายการ`);
+            } else {
+              alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลเข้า Server");
+            }
+          } catch (err) { 
+            console.error(err);
+            alert("เกิดข้อผิดพลาดในการเชื่อมต่อ Server");
+          }
         }
       } catch (err) { 
         console.error(err);
@@ -379,15 +385,13 @@ export default function SurinCourtWarrantApp() {
 
     const recordPayload = [{ ...formData, id: formData.selectedRecordId, ownerUsername: currentUser.username, isSaved: true }];
 
-    setCurrentRecords(prev => prev.map(r => r.id === formData.selectedRecordId ? { ...r, ...formData, isSaved: true } : r));
-
     try {
       await fetch(`${API_URL}/warrants/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: currentUser.username, records: recordPayload })
       });
-      fetchUserWarrants(currentUser.username);
+      await fetchUserWarrants(currentUser.username);
     } catch (err) { console.error(err); }
 
     await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
@@ -396,9 +400,9 @@ export default function SurinCourtWarrantApp() {
 
   const handleDeleteWarrantRecord = async (itemId, blackNo, targetName) => {
     if (window.confirm(`ลบรายการจำเลย ${targetName} (${blackNo || '-'}) ใช่หรือไม่?`)) {
-      setCurrentRecords(prev => prev.filter(r => r.id !== itemId));
       try {
         await fetch(`${API_URL}/warrants/${itemId}`, { method: 'DELETE' });
+        await fetchUserWarrants(currentUser.username);
       } catch (err) { console.error(err); }
       addAuditLog('DELETE_WARRANT', `ลบรายการคดี: ${targetName} (${blackNo || '-'})`);
     }
