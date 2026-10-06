@@ -581,50 +581,56 @@ export default function SurinCourtWarrantApp() {
     document.body.removeChild(link);
   };
 
-  // ระบบ Dynamic Print Window บีบระยะขอบและรูปภาพให้พอดีหน้า A4 100% ไม่ตกไปหน้า 2
+  // ระบบ Dynamic Print Window จัดรูปภาพและข้อความให้ลงแผ่น A4 หน้าเดียวพอดี 100%
   const generateSinglePageHtml = (data) => {
-    let photosMarkup = '<div style="color: #94a3b8; font-size: 11px; text-align: center; padding: 10px;">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
+    let photosMarkup = '<div style="color: #94a3b8; font-size: 11px; text-align: center; padding: 4px;">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
     
     if (data.photos && data.photos.length === 1) {
-      photosMarkup = `<div style="text-align: center; max-height: 220px; overflow: hidden;"><img src="${data.photos[0]}" style="max-width: 100%; max-height: 210px; object-fit: contain; border-radius: 6px; display: inline-block;" /></div>`;
+      photosMarkup = `
+        <div style="text-align: center; width: 100%; max-height: 140px; overflow: hidden; display: flex; justify-content: center; align-items: center;">
+          <img src="${data.photos[0]}" style="max-width: 100%; max-height: 135px; object-fit: contain; border-radius: 4px; border: 1px solid #ccc;" />
+        </div>
+      `;
     } else if (data.photos && data.photos.length > 1) {
       let imgs = data.photos.slice(0, 4).map(p => `
-        <div style="flex: 1 1 45%; max-width: 48%; text-align: center; padding: 2px;">
-          <img src="${p}" style="max-width: 100%; max-height: 140px; object-fit: contain; border-radius: 6px;" />
+        <div style="flex: 1 1 45%; max-width: 48%; text-align: center; padding: 1px;">
+          <img src="${p}" style="max-width: 100%; max-height: 110px; object-fit: contain; border-radius: 4px; border: 1px solid #ccc;" />
         </div>
       `).join('');
-      photosMarkup = `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-height: 290px; overflow: hidden;">${imgs}</div>`;
+      photosMarkup = `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-height: 145px; overflow: hidden;">${imgs}</div>`;
     }
 
     return `
-      <div class="print-page" style="page-break-after: always; page-break-inside: avoid; box-sizing: border-box; height: 98vh; max-height: 287mm; padding: 5px 15px; font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 15pt; line-height: 1.15; color: #000; overflow: hidden;">
-        <div style="text-align: center; font-weight: bold; font-size: 18pt; margin-bottom: 2px;">บันทึกการปิดหมาย / คำบังคับ</div>
-        
-        <div style="text-align: right; margin-bottom: 4px;">
-          <div style="font-weight: bold; font-size: 16pt;">[ศาลจังหวัดสุรินทร์]</div>
-          <div style="font-size: 14pt;">คดีหมายเลขดำที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 8px;">${data.blackNo || "........................"}</span></div>
-          <div style="font-size: 14pt;">คดีหมายเลขแดงที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 8px;">${data.redNo || "........................"}</span></div>
-        </div>
-
-        <div style="margin-bottom: 4px;">เขียนที่ บ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.province || "สุรินทร์"}</span></div>
-        <div style="margin-bottom: 4px;">วันที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${formatThaiDate(data.sendDate)}</span></div>
-        
-        <div style="margin-bottom: 4px;">วันนี้เวลาประมาณ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
-        
-        <div style="margin-bottom: 6px;">ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
-        
-        <div style="text-align: center; font-weight: bold; font-size: 16pt; margin: 6px 0;">จึงบันทึกไว้เป็นหลักฐาน</div>
-        
-        <div style="text-align: right; margin-bottom: 6px;">
-          <div style="display: inline-block; text-align: center; font-size: 14pt;">
-            <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
-            <div style="font-weight: bold;">(${currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
+      <div class="print-page" style="page-break-after: always; page-break-inside: avoid; box-sizing: border-box; width: 100%; height: 270mm; max-height: 270mm; padding: 0 10px; font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 14pt; line-height: 1.1; color: #000; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="text-align: center; font-weight: bold; font-size: 17pt; margin-bottom: 2px;">บันทึกการปิดหมาย / คำบังคับ</div>
+          
+          <div style="text-align: right; margin-bottom: 2px;">
+            <div style="font-weight: bold; font-size: 15pt;">[ศาลจังหวัดสุรินทร์]</div>
+            <div style="font-size: 13pt;">คดีหมายเลขดำที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.blackNo || "........................"}</span></div>
+            <div style="font-size: 13pt;">คดีหมายเลขแดงที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.redNo || "........................"}</span></div>
           </div>
+
+          <div style="margin-bottom: 2px;">เขียนที่ บ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.province || "สุรินทร์"}</span></div>
+          <div style="margin-bottom: 2px;">วันที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${formatThaiDate(data.sendDate)}</span></div>
+          
+          <div style="margin-bottom: 2px;">วันนี้เวลาประมาณ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
+          
+          <div style="margin-bottom: 4px;">ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+          
+          <div style="text-align: center; font-weight: bold; font-size: 15pt; margin: 4px 0;">จึงบันทึกไว้เป็นหลักฐาน</div>
+          
+          <div style="text-align: right; margin-bottom: 4px;">
+            <div style="display: inline-block; text-align: center; font-size: 13pt;">
+              <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
+              <div style="font-weight: bold;">(${currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
+            </div>
+          </div>
+
+          <div style="text-align: center; font-weight: bold; font-size: 13pt; margin-bottom: 4px;">ลักษณะบ้าน <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
         </div>
 
-        <div style="text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 6px;">ลักษณะบ้าน <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
-        
-        <div style="margin-top: 4px; text-align: center;">
+        <div style="margin-top: 2px; text-align: center; width: 100%;">
           ${photosMarkup}
         </div>
       </div>
@@ -644,7 +650,7 @@ export default function SurinCourtWarrantApp() {
             @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
             @page { 
               size: A4 portrait; 
-              margin: 0.6cm; 
+              margin: 0.4cm 0.5cm; 
             }
             html, body { 
               margin: 0; 
@@ -652,6 +658,8 @@ export default function SurinCourtWarrantApp() {
               background: white; 
               font-family: 'Sarabun', 'TH SarabunPSK', sans-serif;
               -webkit-print-color-adjust: exact;
+              height: 100%;
+              overflow: hidden;
             }
             * {
               box-sizing: border-box;
