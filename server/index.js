@@ -1,53 +1,64 @@
-const express = require('express');
-const cors = require('cors');
-const { createClient } = require('@libsql/client');
-const path = require('path');
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createClient } from '@libsql/client';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = process.env.PORT || 5000;
+
+// ✅ ขยายลิมิตการรับข้อมูลเป็น 50MB เพื่อรองรับ Excel และ รูปภาพ Base64
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// เชื่อมต่อฐานข้อมูล Turso Cloud Database
+// เชื่อมต่อ Turso Cloud Database
+const dbUrl = process.env.TURSO_DATABASE_URL || "file:surin_court.db";
+const dbAuthToken = process.env.TURSO_AUTH_TOKEN || "";
+
 const db = createClient({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN
+  url: dbUrl,
+  authToken: dbAuthToken
 });
 
-(async () => {
+// สร้างตารางหากยังไม่มีในระบบ
+const initDb = async () => {
   try {
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        fullName TEXT,
-        position TEXT,
-        role TEXT
-      )
-    `);
-
     await db.execute(`
       CREATE TABLE IF NOT EXISTS warrants (
         id TEXT PRIMARY KEY,
+        batchId TEXT,
         ownerUsername TEXT,
         blackNo TEXT,
         redNo TEXT,
-        payer TEXT,
         warrantType TEXT,
         targetName TEXT,
-        sendDate TEXT,
-        sendTime TEXT,
         address TEXT,
         subdistrict TEXT,
         district TEXT,
         province TEXT,
         zipcode TEXT,
-        warrantResult TEXT,
         price TEXT,
+        warrantResult TEXT,
         gps TEXT,
         photos TEXT,
-        isSaved INTEGER DEFAULT 0
+        sendDate TEXT,
+        sendTime TEXT,
+        isSaved INTEGER
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE,
+        password TEXT,
+        fullName TEXT,
+        position TEXT,
+        role TEXT
       )
     `);
 
@@ -63,196 +74,124 @@ const db = createClient({
       )
     `);
 
-    const adminExists = await db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?)',
-      args: ['admin']
+    // สร้าง Admin เริ่มต้น
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: ['admin_default', 'tomsound', '123456', 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin']
     });
-    if (adminExists.rows.length === 0) {
-      await db.execute({
-        sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
-        args: ['admin', 'admin1234', 'ต้อมครับ', 'ตะพุ่นหญ้าช้าง', 'admin']
-      });
-    }
 
-    const userExists = await db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?)',
-      args: ['tomsound']
-    });
-    if (userExists.rows.length === 0) {
-      await db.execute({
-        sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
-        args: ['tomsound', 'Jira.man1984', 'นายจิรพงษ์ มณีปรุ', 'พนักงานคอมพิวเตอร์', 'admin']
-      });
-    }
   } catch (err) {
     console.error("Database Init Error:", err);
   }
-})();
+};
 
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const cleanUser = (username || '').trim();
-    const result = await db.execute({
-      sql: 'SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND password = ?',
-      args: [cleanUser, password]
-    });
-    if (result.rows.length > 0) res.json({ success: true, user: result.rows[0] });
-    else res.json({ success: false, message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
-  }
-});
+initDb();
 
+// API Routes
 app.get('/api/users', async (req, res) => {
   try {
-    const result = await db.execute('SELECT id, username, fullName, position, role FROM users');
+    const result = await db.execute("SELECT * FROM users");
     res.json(result.rows);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/users', async (req, res) => {
-  const { username, password, fullName, position, role } = req.body;
-  try {
-    await db.execute({
-      sql: 'INSERT INTO users (username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?)',
-      args: [(username || '').trim().toLowerCase(), password, fullName, position, role]
-    });
-    res.json({ success: true });
-  } catch (e) { res.json({ success: false, message: 'Username นี้มีในระบบแล้ว' }); }
-});
-
-app.put('/api/users/:id', async (req, res) => {
-  const { id } = req.params;
-  const { username, password, fullName, position, role } = req.body;
-  try {
-    await db.execute({
-      sql: 'UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?',
-      args: [(username || '').trim().toLowerCase(), password, fullName, position, role, id]
-    });
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
-  }
-});
-
-app.delete('/api/users/:id', async (req, res) => {
-  try {
-    await db.execute({
-      sql: 'DELETE FROM users WHERE id = ?',
-      args: [req.params.id]
-    });
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
-  }
-});
-
-app.get('/api/warrants/:username', async (req, res) => {
-  try {
-    const targetUsername = (req.params.username || '').trim().toLowerCase();
-    const result = await db.execute({
-      sql: 'SELECT * FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? OR ownerUsername = ?',
-      args: [targetUsername, req.params.username]
-    });
-    
-    const parsed = result.rows.map(w => ({
-      ...w,
-      isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1",
-      photos: JSON.parse(w.photos || '[]')
-    }));
-    res.json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ✅ แก้ไข: บันทึกข้อมูลแบบ REPLACE INTO สั้น กระชับ เสถียร 100%
-app.post('/api/warrants/batch', async (req, res) => {
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
   try {
-    const { username, records } = req.body;
-    if (!username || !Array.isArray(records) || records.length === 0) {
-      return res.json({ success: true });
+    const result = await db.execute({
+      sql: "SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND password = ?",
+      args: [username, password]
+    });
+    if (result.rows.length > 0) {
+      res.json({ success: true, user: result.rows[0] });
+    } else {
+      res.status(401).json({ success: false, message: 'Username หรือ Password ไม่ถูกต้อง' });
     }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-    const cleanUsername = (username || '').trim().toLowerCase();
+app.get('/api/warrants/:username', async (req, res) => {
+  const { username } = req.params;
+  try {
+    const result = await db.execute({
+      sql: "SELECT * FROM warrants WHERE LOWER(ownerUsername) = LOWER(?)",
+      args: [username]
+    });
+    const records = result.rows.map(row => ({
+      ...row,
+      photos: row.photos ? JSON.parse(row.photos) : []
+    }));
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
+app.post('/api/warrants/batch', async (req, res) => {
+  const { username, records } = req.body;
+  if (!Array.isArray(records)) return res.status(400).json({ error: "Invalid records format" });
+
+  try {
     for (const rec of records) {
       const photosJson = JSON.stringify(rec.photos || []);
-      const isSavedVal = (rec.isSaved === true || rec.isSaved === 1 || rec.isSaved === "1") ? 1 : 0;
+      const isSavedVal = rec.isSaved ? 1 : 0;
 
       await db.execute({
-        sql: `REPLACE INTO warrants (
-          id, ownerUsername, blackNo, redNo, payer, warrantType, targetName,
-          sendDate, sendTime, address, subdistrict, district,
-          province, zipcode, warrantResult, price, gps, photos, isSaved
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO warrants (id, batchId, ownerUsername, blackNo, redNo, warrantType, targetName, address, subdistrict, district, province, zipcode, price, warrantResult, gps, photos, sendDate, sendTime, isSaved)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                blackNo=excluded.blackNo,
+                redNo=excluded.redNo,
+                warrantType=excluded.warrantType,
+                targetName=excluded.targetName,
+                address=excluded.address,
+                subdistrict=excluded.subdistrict,
+                district=excluded.district,
+                province=excluded.province,
+                zipcode=excluded.zipcode,
+                price=excluded.price,
+                warrantResult=excluded.warrantResult,
+                gps=excluded.gps,
+                photos=excluded.photos,
+                sendDate=excluded.sendDate,
+                sendTime=excluded.sendTime,
+                isSaved=excluded.isSaved`,
         args: [
-          String(rec.id),
-          cleanUsername,
-          String(rec.blackNo || ''),
-          String(rec.redNo || ''),
-          String(rec.payer || ''),
-          String(rec.warrantType || ''),
-          String(rec.targetName || ''),
-          String(rec.sendDate || ''),
-          String(rec.sendTime || ''),
-          String(rec.address || ''),
-          String(rec.subdistrict || ''),
-          String(rec.district || ''),
-          String(rec.province || 'สุรินทร์'),
-          String(rec.zipcode || ''),
-          String(rec.warrantResult || ''),
-          String(rec.price || '0.00'),
-          String(rec.gps || ''),
-          photosJson,
-          isSavedVal
+          rec.id, rec.batchId || '', username.toLowerCase(), rec.blackNo || '', rec.redNo || '',
+          rec.warrantType || '', rec.targetName || '', rec.address || '', rec.subdistrict || '',
+          rec.district || '', rec.province || 'สุรินทร์', rec.zipcode || '32000', rec.price || '0.00',
+          rec.warrantResult || 'ส่งได้โดยวิธีปิดหมาย', rec.gps || '', photosJson, rec.sendDate || '',
+          rec.sendTime || '', isSavedVal
         ]
       });
     }
-
     res.json({ success: true });
   } catch (err) {
-    console.error("Batch Import Error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("Batch insert error:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.delete('/api/warrants/:id', async (req, res) => {
   try {
     await db.execute({
-      sql: 'DELETE FROM warrants WHERE id = ?',
+      sql: "DELETE FROM warrants WHERE id = ?",
       args: [req.params.id]
     });
     res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
-  }
-});
-
-app.delete('/api/warrants/owner/:username', async (req, res) => {
-  try {
-    await db.execute({
-      sql: 'DELETE FROM warrants WHERE LOWER(TRIM(ownerUsername)) = LOWER(?)',
-      args: [(req.params.username || '').trim()]
-    });
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
 app.get('/api/audit-logs', async (req, res) => {
   try {
-    const result = await db.execute('SELECT * FROM audit_logs ORDER BY timestamp DESC');
-    const mappedLogs = result.rows.map(log => ({
-      ...log,
-      user: log.fullName || log.user || log.username || 'ผู้ใช้งานระบบ',
-      fullName: log.fullName || log.user || log.username || 'ผู้ใช้งานระบบ'
-    }));
-    res.json(mappedLogs);
+    const result = await db.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 500");
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -263,7 +202,7 @@ app.post('/api/audit-logs', async (req, res) => {
   const nameToSave = fullName || user || username || '';
   try {
     await db.execute({
-      sql: 'INSERT INTO audit_logs (id, timestamp, username, fullName, user, action, details) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      sql: `INSERT INTO audit_logs (id, timestamp, username, fullName, user, action, details) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [id, timestamp, (username || '').trim().toLowerCase(), nameToSave, nameToSave, action, details]
     });
     res.json({ success: true });
@@ -274,11 +213,10 @@ app.post('/api/audit-logs', async (req, res) => {
 
 app.use(express.static(path.join(__dirname, '../dist')));
 
-app.get(/(.*)/, (req, res) => {
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
