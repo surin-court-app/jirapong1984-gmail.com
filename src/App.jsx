@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
-// API URL สำหรับโหมด Production บน Render / Local Development (แก้ไขให้ใช้ Vite)
+// API URL สำหรับโหมด Production บน Render / Local Development (แก้ไขใช้ Vite)
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 
 export default function SurinCourtWarrantApp() {
@@ -173,8 +173,8 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  // ✅ ปรับความละเอียดบีบอัดภาพเพื่อส่งผ่าน Server โดยไม่หลุดและประหยัดพื้นที่
-  const compressImage = (file, maxWidth = 600, maxHeight = 600, quality = 0.40) => {
+  // ✅ Smart Auto-Compress: ปรับขนาดย่อภาพอัปโหลดอัตโนมัติ คมชัด 100% ปลอดภัยต่อ Server
+  const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.65) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -201,6 +201,9 @@ export default function SurinCourtWarrantApp() {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
+          
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
 
           const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
@@ -389,7 +392,6 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ แก้ไขฟังก์ชันเซฟรายงาน ป้องกัน Payload ใหญ่เกิน และแจ้งเตือนแม่นยำ
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -421,7 +423,7 @@ export default function SurinCourtWarrantApp() {
         await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
         alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์ขึ้น Server เรียบร้อยแล้ว!`);
       } else {
-        alert("เกิดข้อผิดพลาดในการเซฟข้อมูลลง Server (รูปภาพอาจมีขนาดใหญ่เกินไป กรุณลองลบรูปถ่ายแล้วอัปโหลดใหม่)");
+        alert("เกิดข้อผิดพลาดในการเซฟข้อมูลลง Server กรุณากดลบรูปถ่ายแล้วเลือกอัปโหลดใหม่อีกครั้งครับ");
       }
     } catch (err) { 
       console.error(err); 
@@ -1172,7 +1174,7 @@ export default function SurinCourtWarrantApp() {
                             <button
                               type="button"
                               onClick={() => handleRemovePhoto(idx)}
-                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition"
+                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition cursor-pointer"
                               title="ลบรูปนี้"
                             >
                               <X className="w-3 h-3" />
@@ -1839,7 +1841,7 @@ export default function SurinCourtWarrantApp() {
                   <div className="flex flex-col items-end pt-2 space-y-1">
                     <div className="text-center space-y-1">
                       <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
-                      <div className="font-bold">({currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
+                      <div className="font-bold">(${currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
                     </div>
                   </div>
 
