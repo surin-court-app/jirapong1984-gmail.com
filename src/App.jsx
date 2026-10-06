@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
-// API URL สำหรับโหมด Production บน Render / Local Development
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 
 export default function SurinCourtWarrantApp() {
@@ -54,7 +53,6 @@ export default function SurinCourtWarrantApp() {
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // State สำหรับ Modal คลังจัดเก็บข้อมูลย้อนหลัง
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
@@ -64,7 +62,6 @@ export default function SurinCourtWarrantApp() {
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
 
-  // ระบบดึงและจัดเก็บ LocalStorage สำรอง
   const loadLocalWarrants = (username) => {
     let targetUser = username;
     if (!targetUser) {
@@ -123,7 +120,6 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ดึงข้อมูลจาก Server กลาง เพื่อให้คอมพิวเตอร์และมือถือทุกเครื่องเห็นตรงกัน
   const fetchUserWarrantsFromServer = async (username) => {
     if (!username) return;
     const cleanUser = String(username).trim().toLowerCase();
@@ -160,7 +156,6 @@ export default function SurinCourtWarrantApp() {
   useEffect(() => {
     if (currentUser?.username) {
       fetchUserWarrantsFromServer(currentUser.username);
-      // Auto-refresh ซิงก์ข้อมูลจาก Server กลางทุกๆ 10 วินาที
       const interval = setInterval(() => {
         fetchUserWarrantsFromServer(currentUser.username);
       }, 10000);
@@ -306,7 +301,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // นำเข้าไฟล์ Excel และสั่งบันทึกเข้า Server กลางทันที
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -396,7 +390,6 @@ export default function SurinCourtWarrantApp() {
         setCurrentRecords(updatedList);
         saveLocalWarrants(activeUsername, updatedList);
 
-        // สั่งบันทึกลง Server กลาง
         try {
           await fetch(`${API_URL}/warrants/batch`, {
             method: 'POST',
@@ -440,7 +433,6 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // บันทึกข้อมูลซิงก์ขึ้น Server กลาง
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -581,53 +573,53 @@ export default function SurinCourtWarrantApp() {
     document.body.removeChild(link);
   };
 
-  // ระบบ Dynamic Print Window จัดรูปภาพและข้อความให้ลงแผ่น A4 หน้าเดียวพอดี 100%
+  // ระบบ Dynamic Print Window บังคับ 1 หน้ากระดาษ A4 (1 Sheet) 100%
   const generateSinglePageHtml = (data) => {
-    let photosMarkup = '<div style="color: #94a3b8; font-size: 11px; text-align: center; padding: 4px;">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
+    let photosMarkup = '<div style="color: #94a3b8; font-size: 10px; text-align: center; padding: 2px;">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
     
     if (data.photos && data.photos.length === 1) {
       photosMarkup = `
-        <div style="text-align: center; width: 100%; max-height: 140px; overflow: hidden; display: flex; justify-content: center; align-items: center;">
-          <img src="${data.photos[0]}" style="max-width: 100%; max-height: 135px; object-fit: contain; border-radius: 4px; border: 1px solid #ccc;" />
+        <div style="text-align: center; width: 100%; max-height: 110px; overflow: hidden; display: flex; justify-content: center; align-items: center;">
+          <img src="${data.photos[0]}" style="max-width: 100%; max-height: 105px; object-fit: contain; border-radius: 4px; border: 1px solid #ddd;" />
         </div>
       `;
     } else if (data.photos && data.photos.length > 1) {
       let imgs = data.photos.slice(0, 4).map(p => `
         <div style="flex: 1 1 45%; max-width: 48%; text-align: center; padding: 1px;">
-          <img src="${p}" style="max-width: 100%; max-height: 110px; object-fit: contain; border-radius: 4px; border: 1px solid #ccc;" />
+          <img src="${p}" style="max-width: 100%; max-height: 85px; object-fit: contain; border-radius: 4px; border: 1px solid #ddd;" />
         </div>
       `).join('');
-      photosMarkup = `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-height: 145px; overflow: hidden;">${imgs}</div>`;
+      photosMarkup = `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; max-height: 115px; overflow: hidden;">${imgs}</div>`;
     }
 
     return `
-      <div class="print-page" style="page-break-after: always; page-break-inside: avoid; box-sizing: border-box; width: 100%; height: 270mm; max-height: 270mm; padding: 0 10px; font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 14pt; line-height: 1.1; color: #000; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;">
+      <div className="print-page" style="page-break-after: always; page-break-inside: avoid; box-sizing: border-box; width: 100%; max-height: 250mm; padding: 0 5px; font-family: 'TH SarabunPSK', 'Sarabun', sans-serif; font-size: 13.5pt; line-height: 1.05; color: #000; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;">
         <div>
-          <div style="text-align: center; font-weight: bold; font-size: 17pt; margin-bottom: 2px;">บันทึกการปิดหมาย / คำบังคับ</div>
+          <div style="text-align: center; font-weight: bold; font-size: 16pt; margin-bottom: 2px;">บันทึกการปิดหมาย / คำบังคับ</div>
           
           <div style="text-align: right; margin-bottom: 2px;">
-            <div style="font-weight: bold; font-size: 15pt;">[ศาลจังหวัดสุรินทร์]</div>
-            <div style="font-size: 13pt;">คดีหมายเลขดำที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.blackNo || "........................"}</span></div>
-            <div style="font-size: 13pt;">คดีหมายเลขแดงที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px;">${data.redNo || "........................"}</span></div>
+            <div style="font-weight: bold; font-size: 14pt;">[ศาลจังหวัดสุรินทร์]</div>
+            <div style="font-size: 12.5pt;">คดีหมายเลขดำที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.blackNo || "........................"}</span></div>
+            <div style="font-size: 12.5pt;">คดีหมายเลขแดงที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.redNo || "........................"}</span></div>
           </div>
 
-          <div style="margin-bottom: 2px;">เขียนที่ บ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.province || "สุรินทร์"}</span></div>
-          <div style="margin-bottom: 2px;">วันที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${formatThaiDate(data.sendDate)}</span></div>
+          <div style="margin-bottom: 2px;">เขียนที่ บ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.province || "สุรินทร์"}</span></div>
+          <div style="margin-bottom: 2px;">วันที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${formatThaiDate(data.sendDate)}</span></div>
           
-          <div style="margin-bottom: 2px;">วันนี้เวลาประมาณ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
+          <div style="margin-bottom: 2px;">วันนี้เวลาประมาณ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.address || "............"}</span> ตำบล <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.subdistrict || "............"}</span> อำเภอ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.district || "............"}</span> จังหวัด <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
           
-          <div style="margin-bottom: 4px;">ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+          <div style="margin-bottom: 3px;">ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
           
-          <div style="text-align: center; font-weight: bold; font-size: 15pt; margin: 4px 0;">จึงบันทึกไว้เป็นหลักฐาน</div>
+          <div style="text-align: center; font-weight: bold; font-size: 14pt; margin: 2px 0;">จึงบันทึกไว้เป็นหลักฐาน</div>
           
-          <div style="text-align: right; margin-bottom: 4px;">
-            <div style="display: inline-block; text-align: center; font-size: 13pt;">
+          <div style="text-align: right; margin-bottom: 2px;">
+            <div style="display: inline-block; text-align: center; font-size: 12.5pt;">
               <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
               <div style="font-weight: bold;">(${currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
             </div>
           </div>
 
-          <div style="text-align: center; font-weight: bold; font-size: 13pt; margin-bottom: 4px;">ลักษณะบ้าน <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 5px;">${data.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
+          <div style="text-align: center; font-weight: bold; font-size: 12.5pt; margin-bottom: 2px;">ลักษณะบ้าน <span style="border-bottom: 1px dotted #000; font-weight: bold; padding: 0 4px;">${data.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
         </div>
 
         <div style="margin-top: 2px; text-align: center; width: 100%;">
@@ -650,7 +642,7 @@ export default function SurinCourtWarrantApp() {
             @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
             @page { 
               size: A4 portrait; 
-              margin: 0.4cm 0.5cm; 
+              margin: 0.3cm 0.4cm; 
             }
             html, body { 
               margin: 0; 
@@ -658,11 +650,21 @@ export default function SurinCourtWarrantApp() {
               background: white; 
               font-family: 'Sarabun', 'TH SarabunPSK', sans-serif;
               -webkit-print-color-adjust: exact;
-              height: 100%;
+              height: 100vh;
               overflow: hidden;
             }
             * {
               box-sizing: border-box;
+            }
+            @media print {
+              html, body {
+                height: 100%;
+                overflow: hidden !important;
+              }
+              .print-page {
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+              }
             }
           </style>
         </head>
@@ -1631,7 +1633,6 @@ export default function SurinCourtWarrantApp() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] border border-amber-300">
             
-            {/* Header */}
             <div className="bg-slate-900 text-white p-5 flex justify-between items-center border-b-2 border-amber-500">
               <h3 className="text-lg font-bold flex items-center gap-2 text-amber-400">
                 <Folder className="w-5 h-5 text-amber-400" /> คลังจัดเก็บข้อมูลย้อนหลัง (แยกตามวัน/เดือน/ปี)
@@ -1644,7 +1645,6 @@ export default function SurinCourtWarrantApp() {
               </button>
             </div>
 
-            {/* Breadcrumb Navigation */}
             <div className="bg-slate-100 px-6 py-3 border-b text-sm flex items-center gap-2 font-medium text-slate-700">
               <span 
                 className="cursor-pointer hover:underline text-blue-600 font-bold flex items-center gap-1"
@@ -1682,7 +1682,6 @@ export default function SurinCourtWarrantApp() {
               )}
             </div>
 
-            {/* Content Area */}
             <div className="p-6 overflow-y-auto flex-1">
               {!selectedYear && (
                 <div>
@@ -1800,7 +1799,6 @@ export default function SurinCourtWarrantApp() {
               )}
             </div>
 
-            {/* Footer */}
             <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500">
               <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลจัดเก็บถาวร</span>
               <button
