@@ -446,7 +446,7 @@ export default function SurinCourtWarrantApp() {
         await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
         alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์ขึ้น Server เรียบร้อยแล้ว!`);
       } else {
-        alert(`บันทึกข้อมูลสำเร็จแล้ว! (หมายเหตุ: ข้อมูลถูกจัดเก็บในเครื่องเรียบร้อย)`);
+        alert(`บันทึกข้อมูลสำเร็จแล้ว! (หมายเหตุ: ข้อมูลจัดเก็บในเครื่องเรียบร้อย)`);
       }
     } catch (err) { 
       alert(`บันทึกข้อมูลเรียบร้อยแล้ว (ระบบจัดเก็บข้อมูลไว้ในเครื่องชั่วคราว)`);
@@ -1676,7 +1676,7 @@ export default function SurinCourtWarrantApp() {
                 <div className="flex items-end">
                   <button
                     type="submit"
-                    className="w-full bg-amber-800 hover:bg-amber-900 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 shadow"
+                    className="w-full bg-amber-800 hover:bg-amber-900 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 shadow cursor-pointer"
                   >
                     <Plus className="w-4 h-4" /> บันทึกสร้างผู้ใช้
                   </button>
@@ -1788,14 +1788,14 @@ export default function SurinCourtWarrantApp() {
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={() => handleSaveEditUser(u.id)}
-                                  className="text-emerald-700 hover:text-emerald-900 bg-emerald-100 p-1.5 rounded-lg transition"
+                                  className="text-emerald-700 hover:text-emerald-900 bg-emerald-100 p-1.5 rounded-lg transition cursor-pointer"
                                   title="บันทึก"
                                 >
                                   <Save className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => setEditingUserId(null)}
-                                  className="text-gray-600 hover:text-gray-800 bg-gray-200 p-1.5 rounded-lg transition"
+                                  className="text-gray-600 hover:text-gray-800 bg-gray-200 p-1.5 rounded-lg transition cursor-pointer"
                                   title="ยกเลิก"
                                 >
                                   <X className="w-4 h-4" />
@@ -1805,14 +1805,14 @@ export default function SurinCourtWarrantApp() {
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={() => { setEditingUserId(u.id); setEditUserData({ ...u }); }}
-                                  className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-lg transition"
+                                  className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                                   title="แก้ไขข้อมูล"
                                 >
                                   <Edit3 className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteUser(u.id, u.fullName)}
-                                  className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded-lg transition"
+                                  className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded-lg transition cursor-pointer"
                                   title="ลบผู้ใช้งาน"
                                 >
                                   <Trash2 className="w-4 h-4" />
