@@ -289,6 +289,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ✅ อัปเดตฟังก์ชัน handleFileUpload ให้บันทึกลง Server ทันทีที่อัปโหลด Excel
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -372,6 +373,7 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
+          // บันทึกลง Server ทันที
           try {
             await fetch(`${API_URL}/warrants/batch`, {
               method: 'POST',
@@ -381,7 +383,7 @@ export default function SurinCourtWarrantApp() {
           } catch (e) { console.error("Batch Server Sync Error", e); }
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลสำเร็จ ${parsedRecords.length} รายการ`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์ Server สำเร็จ ${parsedRecords.length} รายการ`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
