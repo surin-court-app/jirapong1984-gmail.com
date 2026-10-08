@@ -119,7 +119,6 @@ export default function SurinCourtWarrantApp() {
     const cleanUser = username.trim().toLowerCase();
     
     const backup = loadLocalBackup(cleanUser);
-    if (backup.length > 0) setCurrentRecords(backup);
 
     try {
       const res = await fetch(`${API_URL}/warrants/${cleanUser}`);
@@ -130,11 +129,21 @@ export default function SurinCourtWarrantApp() {
             ...w,
             isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
           }));
-          setCurrentRecords(mapped);
-          saveLocalBackup(cleanUser, mapped);
+          
+          // ผสานข้อมูลระหว่าง Server กับ Backup ท้องถิ่นไม่ให้หลุดหาย
+          const mergedMap = new Map();
+          backup.forEach(item => mergedMap.set(item.id, item));
+          mapped.forEach(item => mergedMap.set(item.id, item));
+          const mergedList = Array.from(mergedMap.values());
+
+          setCurrentRecords(mergedList);
+          saveLocalBackup(cleanUser, mergedList);
+          return;
         }
       }
     } catch (e) { console.error("Fetch Warrants Server Sync Error:", e); }
+
+    if (backup.length > 0) setCurrentRecords(backup);
   };
 
   useEffect(() => {
