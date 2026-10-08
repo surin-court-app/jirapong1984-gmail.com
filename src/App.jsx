@@ -289,7 +289,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ อัปเดตฟังก์ชัน handleFileUpload ให้บันทึกลง Server ทันทีที่อัปโหลด Excel
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -373,7 +372,6 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          // บันทึกลง Server ทันที
           try {
             await fetch(`${API_URL}/warrants/batch`, {
               method: 'POST',
@@ -1833,86 +1831,82 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 (ตรงตามแบบฉบับ 100%) */}
+        {/* แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 (ตรงตามแบบฉบับขวามือ 100%) */}
         <div className="print-area hidden sarabun-font bg-white text-black max-w-2xl mx-auto">
           {printMode === 'single' && (
             <div className="page-single flex flex-col justify-between">
               <div>
-                <div className="text-center font-bold mb-3 text-lg">
+                <div className="text-center font-bold mb-4 text-base">
                   บันทึกการปิดหมาย / คำบังคับ
                 </div>
 
                 {/* ส่วนหัวฝั่งขวา */}
-                <div className="flex justify-end mb-3">
-                  <div className="w-80 space-y-1 text-right">
-                    <div className="font-bold pr-2 text-base">
+                <div className="flex justify-end mb-4">
+                  <div className="w-80 space-y-1 text-right text-sm">
+                    <div className="font-bold pr-2">
                       ศาลจังหวัดสุรินทร์ <span className="font-normal">{formData.price || "๒๔๐/๒๕๖๙"}</span>
                     </div>
-                    <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[150px] text-center font-bold">{formData.blackNo || "........................................"}</span></div>
-                    <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[150px] text-center font-bold">{formData.redNo || "........................................"}</span></div>
+                    <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[160px] text-center font-bold">{formData.blackNo || "........................................"}</span></div>
+                    <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[160px] text-center font-bold">{formData.redNo || "........................................"}</span></div>
                   </div>
                 </div>
 
                 {/* เนื้อหาบันทึก */}
-                <div className="space-y-1.5 text-justify leading-relaxed">
+                <div className="space-y-2 text-justify leading-relaxed text-sm">
                   <div>
-                    เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span>
+                    เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span>
                   </div>
 
                   <div>
-                    วันที่ <span className="dot-underline font-bold">{formatThaiDate(formData.sendDate)}</span>
+                    วันที่ <span className="dot-underline font-bold min-w-[140px] text-center">{formatThaiDate(formData.sendDate)}</span>
                   </div>
 
                   <div>
-                    วันนี้เวลาประมาณ <span className="dot-underline font-bold">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{formData.warrantType || "หมายศาล"}</span>
+                    วันนี้เวลาประมาณ <span className="dot-underline font-bold min-w-[60px] text-center">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold min-w-[180px] text-center">{formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold min-w-[200px] text-center">{formData.targetName || "...................................."}</span>
                   </div>
 
                   <div>
-                    มาส่งให้แก่ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span> เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span>
+                    เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold min-w-[90px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[90px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[90px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
                   </div>
 
                   <div>
-                    อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
-                  </div>
-
-                  <div>
-                    ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span>
+                    ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{formData.targetName || "...................................."}</span>
                   </div>
 
                   <div>
                     ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล
                   </div>
 
-                  <div className="text-center font-bold pt-3 pb-1">
+                  <div className="text-center font-bold pt-4 pb-2">
                     จึงบันทึกไว้เป็นหลักฐาน
                   </div>
 
                   {/* ผู้บันทึก / ลายเซ็น */}
                   <div className="flex flex-col items-end pt-2 space-y-2">
-                    <div className="text-center space-y-1 pr-4">
+                    <div className="text-center space-y-1 pr-6">
                       <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
                       <div className="font-bold">({currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
                     </div>
                   </div>
 
-                  <div className="text-center font-bold pt-2">
+                  <div className="text-center font-bold pt-3">
                     ลักษณะบ้าน
                   </div>
                 </div>
               </div>
 
-              {/* แสดงรูปถ่ายสถานที่ 4 รูป (2x2 Grid) */}
-              <div className="mt-2">
+              {/* แสดงรูปถ่ายสถานที่ 4 รูป (2x2 Grid เต็มความกว้าง) */}
+              <div className="mt-3">
                 {formData.photos && formData.photos.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2.5 w-full">
+                  <div className="grid grid-cols-2 gap-2 w-full">
                     {formData.photos.slice(0, 4).map((photo, pIdx) => (
-                      <div key={pIdx} className="w-full h-44 rounded-md overflow-hidden flex items-center justify-center bg-gray-50 border border-gray-300">
+                      <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-black">
                         <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover" />
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="w-full h-28 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                  <div className="w-full h-32 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
                     [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
                   </div>
                 )}
@@ -1926,77 +1920,73 @@ export default function SurinCourtWarrantApp() {
               {recordsToBatchPrint.map((item, idx) => (
                 <div key={item.id || idx} className="page-batch flex flex-col justify-between pt-1">
                   <div>
-                    <div className="text-center font-bold mb-3 text-lg">
+                    <div className="text-center font-bold mb-4 text-base">
                       บันทึกการปิดหมาย / คำบังคับ
                     </div>
 
-                    <div className="flex justify-end mb-3">
-                      <div className="w-80 space-y-1 text-right">
-                        <div className="font-bold pr-2 text-base">
+                    <div className="flex justify-end mb-4">
+                      <div className="w-80 space-y-1 text-right text-sm">
+                        <div className="font-bold pr-2">
                           ศาลจังหวัดสุรินทร์ <span className="font-normal">{item.price || "๒๔๐/๒๕๖๙"}</span>
                         </div>
-                        <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[150px] text-center font-bold">{item.blackNo || "........................................"}</span></div>
-                        <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[150px] text-center font-bold">{item.redNo || "........................................"}</span></div>
+                        <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[160px] text-center font-bold">{item.blackNo || "........................................"}</span></div>
+                        <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[160px] text-center font-bold">{item.redNo || "........................................"}</span></div>
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 text-justify leading-relaxed">
+                    <div className="space-y-2 text-justify leading-relaxed text-sm">
                       <div>
-                        เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span>
+                        เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{item.province || "สุรินทร์"}</span>
                       </div>
 
                       <div>
-                        วันที่ <span className="dot-underline font-bold">{formatThaiDate(item.sendDate)}</span>
+                        วันที่ <span className="dot-underline font-bold min-w-[140px] text-center">{formatThaiDate(item.sendDate)}</span>
                       </div>
 
                       <div>
-                        วันนี้เวลาประมาณ <span className="dot-underline font-bold">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{item.warrantType || "หมายศาล"}</span>
+                        วันนี้เวลาประมาณ <span className="dot-underline font-bold min-w-[60px] text-center">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold min-w-[180px] text-center">{item.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold min-w-[200px] text-center">{item.targetName || "...................................."}</span>
                       </div>
 
                       <div>
-                        มาส่งให้แก่ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span> เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span>
+                        เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold min-w-[90px] text-center">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[90px] text-center">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[90px] text-center">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{item.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
                       </div>
 
                       <div>
-                        อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
-                      </div>
-
-                      <div>
-                        ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span>
+                        ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{item.targetName || "...................................."}</span>
                       </div>
 
                       <div>
                         ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล
                       </div>
 
-                      <div className="text-center font-bold pt-3 pb-1">
+                      <div className="text-center font-bold pt-4 pb-2">
                         จึงบันทึกไว้เป็นหลักฐาน
                       </div>
 
                       <div className="flex flex-col items-end pt-2 space-y-2">
-                        <div className="text-center space-y-1 pr-4">
+                        <div className="text-center space-y-1 pr-6">
                           <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
                           <div className="font-bold">({currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
                         </div>
                       </div>
 
-                      <div className="text-center font-bold pt-2">
+                      <div className="text-center font-bold pt-3">
                         ลักษณะบ้าน
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-2">
+                  <div className="mt-3">
                     {item.photos && item.photos.length > 0 ? (
-                      <div className="grid grid-cols-2 gap-2.5 w-full">
+                      <div className="grid grid-cols-2 gap-2 w-full">
                         {item.photos.slice(0, 4).map((photo, pIdx) => (
-                          <div key={pIdx} className="w-full h-44 rounded-md overflow-hidden flex items-center justify-center bg-gray-50 border border-gray-300">
+                          <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-black">
                             <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover" />
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="w-full h-28 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                      <div className="w-full h-32 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
                         [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
                       </div>
                     )}
