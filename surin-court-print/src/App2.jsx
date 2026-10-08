@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import * as XLSX from 'xlsx';
 import { villageMapping } from "./villageMapping";
 
 export default function App() {
@@ -7,146 +6,115 @@ export default function App() {
   const [title, setTitle] = useState('');
   const [subTitle, setSubTitle] = useState('');
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
+    try {
+      const XLSX = await import('xlsx');
+      const reader = new FileReader();
 
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const rawData = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      reader.onload = (evt) => {
+        try {
+          const bstr = evt.target.result;
+          const wb = XLSX.read(bstr, { type: 'binary' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const rawData = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-        if (!rawData || rawData.length === 0) {
-          alert("ไม่พบข้อมูลในไฟล์ Excel");
-          return;
-        }
-
-        // ดึงหัวเรื่องเอกสาร
-        if (rawData.length > 1) {
-          setTitle((rawData[0]?.[0] || 'บัญชีหมายที่รับผิดชอบ').toString());
-          setSubTitle((rawData[1]?.[0] || '').toString());
-        }
-
-        const parsedRows = [];
-
-        for (let i = 2; i < rawData.length; i++) {
-          const row = rawData[i];
-          if (!row || row.length === 0) continue;
-
-          let blackNo = (row[1] || '').toString().trim();
-          
-          if (!blackNo || blackNo === 'เลขดำที่' || blackNo.includes('บัญชีหมาย')) continue;
-
-          let rawRedNo = (row[2] || '').toString().trim();
-          let redNo = (rawRedNo === '-' || !rawRedNo) ? '' : rawRedNo;
-          
-          let writType = (row[5] || '').toString().trim();
-          let target = (row[6] || '').toString().trim();
-          let rawAddr = (row[7] || '').toString().trim();
-          let tambon = (row[8] || '').toString().trim();
-          let amphoe = (row[11] || '').toString().trim();
-          
-          let rawPriceStr = (row[13] || '0').toString().replace(/,/g, '').trim();
-          let price = parseFloat(rawPriceStr);
-          if (isNaN(price)) price = 0;
-
-          // 1. ดึงตัวเลขหมู่บ้าน (เป็นตัวเลขเพื่อนำไปใช้เรียงลำดับอย่างถูกต้อง)
-          const mooMatch = rawAddr.match(/(?:ม(?:ู๋|\.)?|หมู่)\s*(\d+)/i);
-          const mooNumInt = mooMatch ? parseInt(mooMatch[1], 10) : 999;
-          const mooNumStr = mooMatch ? mooNumInt.toString() : '';
-
-          // 2. เคลียร์คำนำหน้าตำบล
-          let cleanTambon = tambon.replace(/^(ต\.|ตำบล)/, '').trim();
-          if (!cleanTambon) {
-            const rowStr = row.join(' ');
-            const matchTambonInRow = rowStr.match(/(?:ต\.|ตำบล)\s*([ก-๙]+)/);
-            if (matchTambonInRow) {
-              cleanTambon = matchTambonInRow[1].trim();
-            }
+          if (rawData.length > 1) {
+            setTitle(rawData[0]?.[0] || 'บัญชีหมายที่รับผิดชอบ');
+            setSubTitle(rawData[1]?.[0] || '');
           }
 
-          // 3. ค้นหาชื่อหมู่บ้านจาก villageMapping
-          let villageName = '';
-          if (mooNumStr) {
-            const primaryKey = cleanTambon + '_' + mooNumStr;
-            villageName = villageMapping[primaryKey] || '';
+          const parsedRows = [];
+          for (let i = 3; i < rawData.length; i++) {
+            const row = rawData[i];
+            if (!row) continue;
 
-            if (!villageName) {
-              const keys = Object.keys(villageMapping);
-              const matchedKey = keys.find(k => {
-                const parts = k.split('_');
-                const tName = parts[0].replace(/^(ต\.|ตำบล)/, '').trim();
-                const mNo = parts[1];
-                return (cleanTambon ? tName === cleanTambon : true) && mNo === mooNumStr;
-              });
-              if (matchedKey) {
-                villageName = villageMapping[matchedKey];
-              }
-            }
-          }
+            let blackNo = (row[1] || '').toString().trim();
+            if (!blackNo || blackNo === 'เลขดำที่') continue;
 
-          // 4. แทรกชื่อหมู่บ้านลงในที่อยู่
-          let updatedAddr = rawAddr;
-          if (villageName) {
-            if (!rawAddr.includes(villageName)) {
-              if (mooMatch) {
-                const origMooText = mooMatch[0];
-                updatedAddr = rawAddr.replace(origMooText, origMooText + ' ' + villageName);
-              } else {
-                updatedAddr = rawAddr + ' ' + villageName;
+            let rawRedNo = (row[2] || '').toString().trim();
+            let redNo = (rawRedNo === '-' || !rawRedNo) ? '' : rawRedNo;
+            
+            let writType = (row[5] || '').toString().trim();
+            let target = (row[6] || '').toString().trim();
+            let rawAddr = (row[7] || '').toString().trim();
+            let tambon = (row[8] || '').toString().trim();
+            let amphoe = (row[11] || '').toString().trim();
+            let price = parseFloat((row[13] || '0').toString().replace(/,/g, '')) || 0;
+
+            const mooMatch = rawAddr.match(/(?:ม(?:ู๋|\.)?|หมู่)\s*(\d+)/i);
+            const mooNum = mooMatch ? parseInt(mooMatch[1], 10).toString() : '';
+
+            let cleanTambon = tambon.replace(/^(ต\.|ตำบล)/, '').trim();
+            if (!cleanTambon) {
+              const rowStr = row.join(' ');
+              const matchTambonInRow = rowStr.match(/(?:ต\.|ตำบล)\s*([ก-๙]+)/);
+              if (matchTambonInRow) {
+                cleanTambon = matchTambonInRow[1].trim();
               }
             }
 
-            const doublePattern = new RegExp(villageName + '\\s+' + villageName, 'g');
-            updatedAddr = updatedAddr.replace(doublePattern, villageName);
+            let villageName = '';
+            if (mooNum) {
+              const primaryKey = cleanTambon + '_' + mooNum;
+              villageName = villageMapping[primaryKey] || '';
+
+              if (!villageName) {
+                const keys = Object.keys(villageMapping);
+                const matchedKey = keys.find(k => {
+                  const parts = k.split('_');
+                  const tName = parts[0].replace(/^(ต\.|ตำบล)/, '').trim();
+                  const mNo = parts[1];
+                  return (cleanTambon ? tName === cleanTambon : true) && mNo === mooNum;
+                });
+                if (matchedKey) {
+                  villageName = villageMapping[matchedKey];
+                }
+              }
+            }
+
+            let updatedAddr = rawAddr;
+            if (villageName) {
+              if (!rawAddr.includes(villageName)) {
+                if (mooMatch) {
+                  const origMooText = mooMatch[0];
+                  updatedAddr = rawAddr.replace(origMooText, origMooText + ' ' + villageName);
+                } else {
+                  updatedAddr = rawAddr + ' ' + villageName;
+                }
+              }
+
+              const doublePattern = new RegExp(villageName + '\\s+' + villageName, 'g');
+              updatedAddr = updatedAddr.replace(doublePattern, villageName);
+            }
+
+            updatedAddr = updatedAddr.replace(/\s+/g, ' ').trim();
+
+            parsedRows.push({
+              blackNo, redNo, writType, target,
+              addr: updatedAddr, tambon, amphoe, price
+            });
           }
 
-          updatedAddr = updatedAddr.replace(/\s+/g, ' ').trim();
+          parsedRows.sort((a, b) => a.tambon.localeCompare(b.tambon, 'th'));
 
-          parsedRows.push({
-            blackNo, redNo, writType, target,
-            addr: updatedAddr, tambon, amphoe, price,
-            mooNumInt, villageName
-          });
+          const reindexedRows = parsedRows.map((item, index) => ({
+            ...item,
+            seq: index + 1
+          }));
+
+          setData(reindexedRows);
+        } catch (err) {
+          alert("เกิดข้อผิดพลาดในการอ่านข้อมูลจากไฟล์ Excel");
         }
-
-        // เรียงลำดับอย่างเป็นระบบ: อำเภอ -> ตำบล -> เลขหมู่ (น้อยไปมาก) -> ชื่อหมู่บ้าน
-        parsedRows.sort((a, b) => {
-          // 1. เรียงตามอำเภอ
-          const amphoeCompare = (a.amphoe || '').localeCompare(b.amphoe || '', 'th');
-          if (amphoeCompare !== 0) return amphoeCompare;
-
-          // 2. เรียงตามตำบล
-          const tambonCompare = (a.tambon || '').localeCompare(b.tambon || '', 'th');
-          if (tambonCompare !== 0) return tambonCompare;
-
-          // 3. เรียงตามเลขหมู่บ้าน (น้อยไปมาก เช่น ม.6 -> ม.9 -> ม.21)
-          if (a.mooNumInt !== b.mooNumInt) {
-            return a.mooNumInt - b.mooNumInt;
-          }
-
-          // 4. เรียงตามชื่อหมู่บ้าน
-          return (a.villageName || '').localeCompare(b.villageName || '', 'th');
-        });
-
-        const reindexedRows = parsedRows.map((item, index) => ({
-          ...item,
-          seq: index + 1
-        }));
-
-        setData(reindexedRows);
-      } catch (err) {
-        console.error(err);
-        alert("เกิดข้อผิดพลาดในการอ่านข้อมูลจากไฟล์ Excel: " + err.message);
-      }
-    };
-
-    reader.readAsBinaryString(file);
+      };
+      reader.readAsBinaryString(file);
+    } catch (err) {
+      alert("ไม่สามารถโหลดไลบรารีอ่าน Excel ได้");
+    }
   };
 
   const totalPrice = data.reduce((sum, item) => sum + item.price, 0);
@@ -290,7 +258,7 @@ export default function App() {
         <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: '2px dashed #94a3b8', backgroundColor: '#f8fafc', padding: '32px', borderRadius: '12px', cursor: 'pointer' }}>
           <div style={{ fontSize: '48px', marginBottom: '8px' }}>📂</div>
           <span style={{ fontWeight: 'bold', fontSize: '22px', color: '#0f172a' }}>คลิกเพื่อเลือกไฟล์ Excel (.xls / .xlsx)</span>
-          <span style={{ fontSize: '18px', color: '#64748b', marginTop: '6px' }}>ระบบจะเติมชื่อหมู่บ้าน เรียงลำดับตามตำบล/หมู่บ้าน และคำนวณยอดเงินให้อัตโนมัติ</span>
+          <span style={{ fontSize: '18px', color: '#64748b', marginTop: '6px' }}>ระบบจะเติมชื่อหมู่บ้าน เรียงลำดับตามตำบล (ก-ฮ) และคำนวณยอดเงินให้อัตโนมัติ</span>
           <input type="file" accept=".xls,.xlsx" onChange={handleFileUpload} style={{ display: 'none' }} />
         </label>
       </div>
