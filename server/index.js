@@ -10,12 +10,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ ขยายลิมิตการรับข้อมูลเป็น 50MB เพื่อรองรับ Excel และ รูปภาพ Base64
+// ✅ ขยายลิมิตการรับข้อมูลเป็น 100MB ป้องกันปัญหา Payload Error เวลาส่งรูปภาพหลายรูป
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-// เชื่อมต่อ Turso Cloud Database
+// เชื่อมต่อ Turso Cloud Database หรือ Local SQLite
 const dbUrl = process.env.TURSO_DATABASE_URL || "file:surin_court.db";
 const dbAuthToken = process.env.TURSO_AUTH_TOKEN || "";
 
@@ -80,6 +80,7 @@ const initDb = async () => {
       args: ['admin_default', 'tomsound', '123456', 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin']
     });
 
+    console.log("Database initialized successfully");
   } catch (err) {
     console.error("Database Init Error:", err);
   }
@@ -92,6 +93,45 @@ app.get('/api/users', async (req, res) => {
   try {
     const result = await db.execute("SELECT * FROM users");
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  const { username, password, fullName, position, role } = req.body;
+  const newId = `user_${Date.now()}`;
+  try {
+    await db.execute({
+      sql: `INSERT INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [newId, username.trim().toLowerCase(), password, fullName, position, role || 'user']
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Username นี้มีในระบบแล้ว หรือเกิดข้อผิดพลาด' });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  const { username, password, fullName, position, role } = req.body;
+  try {
+    await db.execute({
+      sql: `UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?`,
+      args: [username.trim().toLowerCase(), password, fullName, position, role, req.params.id]
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    await db.execute({
+      sql: "DELETE FROM users WHERE id = ?",
+      args: [req.params.id]
+    });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -208,6 +248,15 @@ app.post('/api/audit-logs', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.delete('/api/audit-logs/clear-old', async (req, res) => {
+  try {
+    await db.execute("DELETE FROM audit_logs");
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
