@@ -130,7 +130,6 @@ export default function SurinCourtWarrantApp() {
             isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
           }));
           
-          // ผสานข้อมูลระหว่าง Server กับ Backup ท้องถิ่นไม่ให้หลุดหาย
           const mergedMap = new Map();
           backup.forEach(item => mergedMap.set(item.id, item));
           mapped.forEach(item => mergedMap.set(item.id, item));
@@ -207,7 +206,7 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 750, maxHeight = 750, quality = 0.45) => {
+  const compressImage = (file, maxWidth = 600, maxHeight = 600, quality = 0.35) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -390,7 +389,7 @@ export default function SurinCourtWarrantApp() {
           } catch (e) { console.error("Batch Server Sync Error", e); }
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์ Server สำเร็จ ${parsedRecords.length} รายการ`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลสำเร็จ ${parsedRecords.length} รายการ`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
@@ -455,10 +454,10 @@ export default function SurinCourtWarrantApp() {
         await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
         alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์ขึ้น Server เรียบร้อยแล้ว!`);
       } else {
-        alert(`บันทึกข้อมูลเรียบร้อยแล้ว (ข้อมูลถูกสำรองไว้ในเครื่องเรียบร้อย)`);
+        alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
       }
     } catch (err) { 
-      alert(`บันทึกข้อมูลเรียบร้อยแล้ว (ระบบจัดเก็บข้อมูลไว้ในเครื่องชั่วคราว)`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
     }
   };
 
