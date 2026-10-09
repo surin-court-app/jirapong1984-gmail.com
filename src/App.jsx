@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzt-bLJSgUUqSE1kbkFgOV4taJTl0Hz3kWBDeT6boZOCc4ErcGEs7eGtts9QRCUJir0Q/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzDKn7sgNkC0TwieKldHExNQycBdd4qrSXEbAhUo7oPIv7HClX7qpjx3Y5zRheM58RYPA/exec';
 
 export default function SurinCourtWarrantApp() {
   const getCurrentTimeStr = () => {
@@ -115,7 +115,6 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ✅ ดึงข้อมูลจาก Google Sheets ถาวร
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     const cleanUser = username.trim().toLowerCase();
@@ -297,7 +296,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ อัปโหลด Excel บันทึกลง Google Sheets ทันที
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -381,7 +379,6 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          // ส่งขึ้น Google Sheets ถาวร
           try {
             await fetch(GOOGLE_SCRIPT_URL, {
               method: 'POST',
@@ -392,7 +389,7 @@ export default function SurinCourtWarrantApp() {
           } catch (e) { console.error("Google Sheet Batch Sync Error", e); }
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์ Google Sheets สำเร็จ ${parsedRecords.length} รายการ`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์ Google Sheet 'srnccourtrider' สำเร็จ ${parsedRecords.length} รายการ`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
@@ -424,7 +421,6 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ บันทึกผลการส่งหมายส่งเข้า Google Sheets ถาวร
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -456,7 +452,7 @@ export default function SurinCourtWarrantApp() {
       });
 
       await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
-      alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์เข้า Google Sheets สำเร็จเรียบร้อยแล้ว!`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์เข้า Google Sheet 'srnccourtrider' เรียบร้อยแล้ว!`);
     } catch (err) { 
       alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
     }
@@ -1238,7 +1234,7 @@ export default function SurinCourtWarrantApp() {
                   type="submit" 
                   className="flex-1 bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
                 >
-                  <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server (Google Sheets)
+                  <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server (srnccourtrider)
                 </button>
 
                 <button 
@@ -1451,7 +1447,7 @@ export default function SurinCourtWarrantApp() {
               </div>
 
               <div className="bg-gray-50 p-4 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
-                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Google Sheets ถาวร</span>
+                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Google Sheet 'srnccourtrider' ถาวร</span>
                 <button
                   onClick={() => setShowArchiveModal(false)}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg transition font-bold cursor-pointer"
