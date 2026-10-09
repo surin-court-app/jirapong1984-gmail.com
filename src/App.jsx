@@ -4,40 +4,20 @@ import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
-// ฟังก์ชันยิงข้อมูลเข้า Google Apps Script ผ่าน Hidden Form (รองรับ e.parameter.postData ชัวร์ 100%)
-const sendToGoogleScript = (payload) => {
-  return new Promise((resolve) => {
-    try {
-      const iframeName = 'hidden_iframe_' + Date.now();
-      const iframe = document.createElement('iframe');
-      iframe.name = iframeName;
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = GOOGLE_SCRIPT_URL;
-      form.target = iframeName;
-
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'postData';
-      input.value = JSON.stringify(payload);
-      form.appendChild(input);
-
-      document.body.appendChild(form);
-      form.submit();
-
-      setTimeout(() => {
-        try { document.body.removeChild(form); } catch (e) {}
-        try { document.body.removeChild(iframe); } catch (e) {}
-        resolve(true);
-      }, 1500);
-    } catch (err) {
-      console.error("Form submit error", err);
-      resolve(false);
-    }
-  });
+// ฟังก์ชันยิงข้อมูลเข้า Google Apps Script ผ่าน Fetch (text/plain ข้าม CORS Preflight และยิงตรงชัวร์ 100%)
+const sendToGoogleScript = async (payload) => {
+  try {
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (err) {
+    console.error("Fetch Error:", err);
+    return false;
+  }
 };
 
 export default function SurinCourtWarrantApp() {
