@@ -87,7 +87,7 @@ export default function SurinCourtWarrantApp() {
     }
   }, [currentUser]);
 
-  // 3. ✨ ดึงข้อมูลรายการคดีของ User ตนเองจาก Server อัตโนมัติในทุกอุปกรณ์เมื่อเปิดแอป
+  // 3. ✨ ดึงข้อมูลรายการคดีของ User ตนเองจาก Server อัตโนมัติเมื่อเปลี่ยนผู้ใช้/โหลดหน้าเว็บ
   useEffect(() => {
     if (currentUser?.username) {
       loadWarrantsFromServer(currentUser.username);
@@ -130,7 +130,7 @@ export default function SurinCourtWarrantApp() {
     if (!targetUser || !Array.isArray(records)) return;
 
     try {
-      await fetch(`${API_URL}/warrants/batch`, {
+      const res = await fetch(`${API_URL}/warrants/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,8 +138,11 @@ export default function SurinCourtWarrantApp() {
           records: records
         })
       });
+      const data = await res.json();
+      return data;
     } catch (err) {
       console.error("Sync to backend error:", err);
+      return null;
     }
   };
 
@@ -173,7 +176,7 @@ export default function SurinCourtWarrantApp() {
     setWarrantRecords([]);
   };
 
-  // นำเข้าไฟล์ Excel บัญชีหมายศาล (ซิงก์ขึ้นส่วนกลางทันที ไม่ว่านำเข้าจากเครื่องไหน)
+  // นำเข้าไฟล์ Excel บัญชีหมายศาล (ปรับ ID ป้องกันซ้ำ + ซิงก์ดึงข้อมูลจาก Server ทันที)
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -188,30 +191,40 @@ export default function SurinCourtWarrantApp() {
         const ws = wb.Sheets[wsname];
         const rawData = XLSX.utils.sheet_to_json(ws);
 
-        const newRecords = rawData.map((row, index) => ({
-          id: `warrant_${Date.now()}_${index}`,
-          blackNo: row['เลขดำที่'] || row['หมายเลขคดีดำ'] || '',
-          redNo: row['เลขแดงที่'] || row['หมายเลขคดีแดง'] || '',
-          warrantType: row['ประเภทหมาย'] || row['หมายอะไร'] || 'หมายนัด',
-          targetName: row['ชื่อจำเลย'] || row['หมายถึงใคร'] || '',
-          address: row['ที่อยู่'] || '',
-          subdistrict: row['ตำบล'] || '',
-          district: row['อำเภอ'] || 'เมืองสุรินทร์',
-          province: row['จังหวัด'] || 'สุรินทร์',
-          zipcode: String(row['รหัสไปรษณีย์'] || '32000'),
-          price: String(row['ค่านำส่ง'] || row['ราคา'] || '0.00'),
-          warrantResult: 'ส่งได้โดยวิธีปิดหมาย',
-          gps: '',
-          photos: [],
-          sendDate: new Date().toISOString().split('T')[0],
-          sendTime: getCurrentTimeStr(),
-          isSaved: 0
-        }));
+        const nowTs = Date.now();
+        const newRecords = rawData.map((row, index) => {
+          const blackNoVal = row['เลขดำที่'] || row['หมายเลขคดีดำ'] || '';
+          const targetNameVal = row['ชื่อจำเลย'] || row['หมายถึงใคร'] || '';
+          // สร้าง ID เอกลักษณ์เฉพาะรายการ เพื่อป้องกัน ID ซ้ำกันใน Database
+          const uniqueId = `warrant_${currentUser.username}_${nowTs}_${index}_${Math.random().toString(36).substr(2, 5)}`;
 
-        setWarrantRecords(newRecords);
-        
-        // ✨ บันทึกขึ้นเซิร์ฟเวอร์กลางทันที
+          return {
+            id: uniqueId,
+            blackNo: String(blackNoVal),
+            redNo: String(row['เลขแดงที่'] || row['หมายเลขคดีแดง'] || ''),
+            warrantType: String(row['ประเภทหมาย'] || row['หมายอะไร'] || 'หมายนัด'),
+            targetName: String(targetNameVal),
+            address: String(row['ที่อยู่'] || ''),
+            subdistrict: String(row['ตำบล'] || ''),
+            district: String(row['อำเภอ'] || 'เมืองสุรินทร์'),
+            province: String(row['จังหวัด'] || 'สุรินทร์'),
+            zipcode: String(row['รหัสไปรษณีย์'] || '32000'),
+            price: String(row['ค่านำส่ง'] || row['ราคา'] || '0.00'),
+            warrantResult: 'ส่งได้โดยวิธีปิดหมาย',
+            gps: '',
+            photos: [],
+            sendDate: new Date().toISOString().split('T')[0],
+            sendTime: getCurrentTimeStr(),
+            isSaved: 0
+          };
+        });
+
+        // 1. บันทึกขึ้นเซิร์ฟเวอร์กลางทันที
         await syncWarrantsToBackend(newRecords, currentUser.username);
+        
+        // 2. ดึงข้อมูลจริงจาก Server กลับมาอัปเดตหน้าจอทันที
+        await loadWarrantsFromServer(currentUser.username);
+
         alert(`อัปโหลดและบันทึกคดีเรียบร้อยจำนวน ${newRecords.length} รายการ (เปิดดูได้จากทั้งคอมพิวเตอร์และมือถือทันที)`);
       } catch (err) {
         alert("เกิดข้อผิดพลาดในการอ่านไฟล์ Excel");
