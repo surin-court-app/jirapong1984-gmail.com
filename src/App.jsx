@@ -296,6 +296,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ✅ ปรับปรุงการส่งข้อมูล Excel ยิงตรงไปบันทึกบน Google Sheet 'srnccourtrider'
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -379,6 +380,7 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
+          // ส่งข้อมูลบันทึกลง Google Sheet srnccourtrider โดยตรง
           try {
             await fetch(GOOGLE_SCRIPT_URL, {
               method: 'POST',
@@ -389,7 +391,7 @@ export default function SurinCourtWarrantApp() {
           } catch (e) { console.error("Google Sheet Batch Sync Error", e); }
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์ Google Sheet 'srnccourtrider' สำเร็จ ${parsedRecords.length} รายการ`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลสำเร็จ ${parsedRecords.length} รายการ (บันทึกลง Google Sheet 'srnccourtrider' แล้ว)`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
