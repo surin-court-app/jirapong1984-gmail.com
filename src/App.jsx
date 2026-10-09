@@ -4,7 +4,7 @@ import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
-// ฟังก์ชันยิงข้อมูลเข้า Google Apps Script ผ่าน Fetch (text/plain ข้าม CORS Preflight และยิงตรงชัวร์ 100%)
+// ฟังก์ชันยิงข้อมูลเข้า Google Apps Script ผ่าน Fetch
 const sendToGoogleScript = async (payload) => {
   try {
     await fetch(GOOGLE_SCRIPT_URL, {
@@ -221,7 +221,8 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 500, maxHeight = 500, quality = 0.3) => {
+  // ✅ ปรับขนาดภาพให้เล็กลงอัตโนมัติ (400x400 คุณภาพ 0.3) เพื่อส่งขึ้น Google Drive ได้ทันที
+  const compressImage = (file, maxWidth = 400, maxHeight = 400, quality = 0.3) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -264,20 +265,12 @@ export default function SurinCourtWarrantApp() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    const validFiles = files.filter(file => {
-      if (file.size > 15 * 1024 * 1024) {
-        alert(`ไฟล์ ${file.name} มีขนาดเกิน 15MB`);
-        return false;
-      }
-      return true;
-    });
-
     const uploadNow = new Date();
     const uploadDateStr = uploadNow.toISOString().split('T')[0];
     const uploadTimeStr = `${String(uploadNow.getHours()).padStart(2, '0')}:${String(uploadNow.getMinutes()).padStart(2, '0')}`;
 
     const newPhotos = [];
-    for (const file of validFiles) {
+    for (const file of files) {
       try {
         const compressedBase64 = await compressImage(file);
         newPhotos.push(compressedBase64);
@@ -431,6 +424,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
+  // ✅ บันทึกรายงานผล (ถอดเงื่อนไขการบล็อกขนาดรูปภาพออกทั้งหมด เพื่อส่งเข้า Google Drive)
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -457,7 +451,7 @@ export default function SurinCourtWarrantApp() {
       await sendToGoogleScript({ action: 'saveBatch', records: [updatedRecord] });
 
       await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
-      alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์เข้า Google Sheet 'srnccourtrider' เรียบร้อยแล้ว!`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จ! ระบบได้ซิงก์ข้อมูลลง Google Sheet และจัดเก็บรูปภาพเข้า Google Drive โฟลเดอร์ Warrant_Photos เรียบร้อยแล้ว`);
     } catch (err) { 
       console.error(err);
       alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
