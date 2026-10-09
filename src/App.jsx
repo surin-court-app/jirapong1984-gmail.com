@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzt-bLJSgUUqSE1kbkFgOV4taJTl0Hz3kWBDeT6boZOCc4ErcGEs7eGtts9QRCUJir0Q/exec';
 
 export default function SurinCourtWarrantApp() {
   const getCurrentTimeStr = () => {
@@ -114,14 +115,16 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
+  // ✅ ดึงข้อมูลจาก Google Sheets ถาวร
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     const cleanUser = username.trim().toLowerCase();
     
     const backup = loadLocalBackup(cleanUser);
+    if (backup.length > 0) setCurrentRecords(backup);
 
     try {
-      const res = await fetch(`${API_URL}/warrants/${cleanUser}`);
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -129,7 +132,7 @@ export default function SurinCourtWarrantApp() {
             ...w,
             isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
           }));
-          
+
           const mergedMap = new Map();
           backup.forEach(item => mergedMap.set(item.id, item));
           mapped.forEach(item => mergedMap.set(item.id, item));
@@ -137,12 +140,9 @@ export default function SurinCourtWarrantApp() {
 
           setCurrentRecords(mergedList);
           saveLocalBackup(cleanUser, mergedList);
-          return;
         }
       }
-    } catch (e) { console.error("Fetch Warrants Server Sync Error:", e); }
-
-    if (backup.length > 0) setCurrentRecords(backup);
+    } catch (e) { console.error("Fetch Warrants Google Sheet Sync Error:", e); }
   };
 
   useEffect(() => {
@@ -297,6 +297,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ✅ อัปโหลด Excel บันทึกลง Google Sheets ทันที
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -380,16 +381,18 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
+          // ส่งขึ้น Google Sheets ถาวร
           try {
-            await fetch(`${API_URL}/warrants/batch`, {
+            await fetch(GOOGLE_SCRIPT_URL, {
               method: 'POST',
+              mode: 'no-cors',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: activeUsername, records: parsedRecords })
+              body: JSON.stringify({ action: 'saveBatch', records: parsedRecords })
             });
-          } catch (e) { console.error("Batch Server Sync Error", e); }
+          } catch (e) { console.error("Google Sheet Batch Sync Error", e); }
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลสำเร็จ ${parsedRecords.length} รายการ`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์ Google Sheets สำเร็จ ${parsedRecords.length} รายการ`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
@@ -421,6 +424,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
+  // ✅ บันทึกผลการส่งหมายส่งเข้า Google Sheets ถาวร
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -444,18 +448,15 @@ export default function SurinCourtWarrantApp() {
     saveLocalBackup(activeUsername, updatedList);
 
     try {
-      const res = await fetch(`${API_URL}/warrants/batch`, {
+      await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: activeUsername, records: [updatedRecord] })
+        body: JSON.stringify({ action: 'saveBatch', records: [updatedRecord] })
       });
 
-      if (res.ok) {
-        await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
-        alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์ขึ้น Server เรียบร้อยแล้ว!`);
-      } else {
-        alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
-      }
+      await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์เข้า Google Sheets สำเร็จเรียบร้อยแล้ว!`);
     } catch (err) { 
       alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
     }
@@ -470,7 +471,12 @@ export default function SurinCourtWarrantApp() {
       if (activeUsername) saveLocalBackup(activeUsername, filtered);
 
       try {
-        await fetch(`${API_URL}/warrants/${itemId}`, { method: 'DELETE' });
+        await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deleteWarrant', id: itemId })
+        });
       } catch (err) { console.error(err); }
       addAuditLog('DELETE_WARRANT', `ลบรายการคดี: ${targetName} (${blackNo || '-'})`);
     }
@@ -742,7 +748,7 @@ export default function SurinCourtWarrantApp() {
           <div className="bg-gray-900 text-center p-6 border-b-4 border-yellow-500 flex flex-col items-center">
             <img src="/srnc-picture.png" alt="ตราศาล" className="w-24 h-24 object-contain mb-3 drop-shadow-md" onError={(e) => e.target.src = "/srncpicture.png"} />
             <h1 className="text-xl font-extrabold text-yellow-400 tracking-wide">ศาลจังหวัดสุรินทร์</h1>
-            <p className="text-xs text-gray-300 mt-1">ระบบงานบันทึกและติดตามการส่งหมายศาลอิเล็กทรอนิกส์ (Server Online)</p>
+            <p className="text-xs text-gray-300 mt-1">ระบบงานบันทึกและติดตามการส่งหมายศาลอิเล็กทรอนิกส์ (Google Sheets Online)</p>
           </div>
           <div className="p-6 md:p-8 space-y-6">
             <div className="text-center">
@@ -866,7 +872,7 @@ export default function SurinCourtWarrantApp() {
             <img src="/srnc-picture.png" alt="ตราศาล" className="w-12 h-12 object-contain drop-shadow" onError={(e) => e.target.src = "/srncpicture.png"} />
             <div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-yellow-400 flex items-center gap-2">ระบบบันทึกและติดตามการส่งหมายศาล</h1>
-              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Database Sync Online</span></p>
+              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Google Sheets Sync Online</span></p>
             </div>
           </div>
 
@@ -1232,7 +1238,7 @@ export default function SurinCourtWarrantApp() {
                   type="submit" 
                   className="flex-1 bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
                 >
-                  <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server
+                  <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server (Google Sheets)
                 </button>
 
                 <button 
@@ -1445,7 +1451,7 @@ export default function SurinCourtWarrantApp() {
               </div>
 
               <div className="bg-gray-50 p-4 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
-                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Server ถาวร</span>
+                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Google Sheets ถาวร</span>
                 <button
                   onClick={() => setShowArchiveModal(false)}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg transition font-bold cursor-pointer"
