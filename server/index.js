@@ -104,7 +104,7 @@ app.post('/api/users', async (req, res) => {
   try {
     await db.execute({
       sql: `INSERT INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [newId, username.trim().toLowerCase(), password, fullName, position, role || 'user']
+      args: [newId, (username || '').trim().toLowerCase(), password, fullName, position, role || 'user']
     });
     res.json({ success: true });
   } catch (err) {
@@ -117,7 +117,7 @@ app.put('/api/users/:id', async (req, res) => {
   try {
     await db.execute({
       sql: `UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?`,
-      args: [username.trim().toLowerCase(), password, fullName, position, role, req.params.id]
+      args: [(username || '').trim().toLowerCase(), password, fullName, position, role, req.params.id]
     });
     res.json({ success: true });
   } catch (err) {
@@ -139,10 +139,11 @@ app.delete('/api/users/:id', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  const cleanUsername = (username || '').trim();
   try {
     const result = await db.execute({
       sql: "SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND password = ?",
-      args: [username, password]
+      args: [cleanUsername, password]
     });
     if (result.rows.length > 0) {
       res.json({ success: true, user: result.rows[0] });
@@ -154,12 +155,13 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// ✅ ดึงข้อมูลคดี (ตัดช่องว่างข้างหน้า/ข้างหลัง Username เพื่อความแม่นยำ 100%)
 app.get('/api/warrants/:username', async (req, res) => {
-  const { username } = req.params;
+  const cleanUsername = (req.params.username || '').trim();
   try {
     const result = await db.execute({
-      sql: "SELECT * FROM warrants WHERE LOWER(ownerUsername) = LOWER(?)",
-      args: [username]
+      sql: "SELECT * FROM warrants WHERE LOWER(ownerUsername) = LOWER(?) ORDER BY id DESC",
+      args: [cleanUsername]
     });
     const records = result.rows.map(row => ({
       ...row,
@@ -171,9 +173,12 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
+// ✅ บันทึกคดี (ตัดช่องว่าง Username อัตโนมัติ)
 app.post('/api/warrants/batch', async (req, res) => {
   const { username, records } = req.body;
   if (!Array.isArray(records)) return res.status(400).json({ error: "Invalid records format" });
+
+  const cleanUsername = (username || '').trim().toLowerCase();
 
   try {
     for (const rec of records) {
@@ -201,7 +206,7 @@ app.post('/api/warrants/batch', async (req, res) => {
                 sendTime=excluded.sendTime,
                 isSaved=excluded.isSaved`,
         args: [
-          rec.id, rec.batchId || '', username.toLowerCase(), rec.blackNo || '', rec.redNo || '',
+          rec.id, rec.batchId || '', cleanUsername, rec.blackNo || '', rec.redNo || '',
           rec.warrantType || '', rec.targetName || '', rec.address || '', rec.subdistrict || '',
           rec.district || '', rec.province || 'สุรินทร์', rec.zipcode || '32000', rec.price || '0.00',
           rec.warrantResult || 'ส่งได้โดยวิธีปิดหมาย', rec.gps || '', photosJson, rec.sendDate || '',
