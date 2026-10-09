@@ -296,7 +296,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ ปรับปรุงการส่งข้อมูล Excel ยิงตรงไปบันทึกบน Google Sheet 'srnccourtrider'
+  // ✅ ปรับแก้การนำเข้า Excel ส่งข้อมูลด้วย text/plain เพื่อข้าม CORS
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -380,18 +380,17 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          // ส่งข้อมูลบันทึกลง Google Sheet srnccourtrider โดยตรง
+          // ส่งข้อมูลลง Google Sheet srnccourtrider ผ่าน text/plain
           try {
             await fetch(GOOGLE_SCRIPT_URL, {
               method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
               body: JSON.stringify({ action: 'saveBatch', records: parsedRecords })
             });
           } catch (e) { console.error("Google Sheet Batch Sync Error", e); }
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลสำเร็จ ${parsedRecords.length} รายการ (บันทึกลง Google Sheet 'srnccourtrider' แล้ว)`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์เข้า Google Sheet 'srnccourtrider' สำเร็จ ${parsedRecords.length} รายการ`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
@@ -423,6 +422,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
+  // ✅ ปรับแก้การบันทึกรายงานผล ส่งรูปภาพและข้อมูลผ่าน text/plain ข้ามขีดจำกัด CORS
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -446,16 +446,18 @@ export default function SurinCourtWarrantApp() {
     saveLocalBackup(activeUsername, updatedList);
 
     try {
+      const payloadData = JSON.stringify({ action: 'saveBatch', records: [updatedRecord] });
+
       await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveBatch', records: [updatedRecord] })
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: payloadData
       });
 
       await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
       alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์เข้า Google Sheet 'srnccourtrider' เรียบร้อยแล้ว!`);
     } catch (err) { 
+      console.error(err);
       alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
     }
   };
@@ -471,8 +473,7 @@ export default function SurinCourtWarrantApp() {
       try {
         await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'deleteWarrant', id: itemId })
         });
       } catch (err) { console.error(err); }
