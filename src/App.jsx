@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gT1v7mAORr8RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
 // ฟังก์ชันยิงข้อมูลเข้า Google Apps Script ผ่าน Fetch
 const sendToGoogleScript = async (payload) => {
@@ -131,7 +131,7 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ✅ ซิงก์ดึงข้อมูลจากทั้ง Backend Render และ Google Sheet เพื่อให้เห็นข้อมูลข้ามเครื่อง (มือถือ-คอม)
+  // ✅ ซิงก์ดึงข้อมูลจาก Render Backend Database และ Google Sheet
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     const cleanUser = username.trim().toLowerCase();
@@ -140,7 +140,7 @@ export default function SurinCourtWarrantApp() {
     if (backup.length > 0) setCurrentRecords(backup);
 
     try {
-      // 1. ดึงจาก Render Backend Database (SQLite/Turso)
+      // 1. ดึงจาก Render Backend Database
       const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
       let backendWarrants = [];
       if (resBackend.ok) {
@@ -160,7 +160,6 @@ export default function SurinCourtWarrantApp() {
         }
       }
 
-      // รวมข้อมูลจากทั้งสองแหล่งโดยไม่ซ้ำกัน
       const mergedMap = new Map();
       backup.forEach(item => mergedMap.set(item.id, item));
       backendWarrants.forEach(item => mergedMap.set(item.id, { ...item, isSaved: Boolean(item.isSaved) }));
@@ -419,7 +418,7 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          // ✅ บันทึกลงทั้ง Render Backend และ Google Sheet
+          // ✅ บันทึกลง Render Backend และ Google Sheet
           await syncBatchToBackend(parsedRecords);
           await sendToGoogleScript({ action: 'saveBatch', records: parsedRecords });
 
