@@ -24,11 +24,13 @@ const db = createClient({
   authToken: dbAuthToken
 });
 
-// สร้างตารางหากยังไม่มีในระบบ (พร้อมรีเซ็ตตารางเดิมเพื่อลบข้อผิดพลาด Datatype Mismatch)
+// สร้างตารางหากยังไม่มีในระบบ (พร้อมรีเซ็ตตารางเดิมทั้งหมดเพื่อลบข้อผิดพลาด Datatype Mismatch)
 const initDb = async () => {
   try {
-    // ลบตารางเดิมที่มีคอลัมน์ชนิดข้อมูลไม่ตรงกันออกก่อน
+    // ลบตารางเดิมทั้งหมดที่มีคอลัมน์ชนิดข้อมูลไม่ตรงกันออกก่อน
     await db.execute(`DROP TABLE IF EXISTS warrants;`);
+    await db.execute(`DROP TABLE IF EXISTS users;`);
+    await db.execute(`DROP TABLE IF EXISTS audit_logs;`);
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS warrants (
@@ -57,7 +59,7 @@ const initDb = async () => {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        username TEXT UNIQUE,
+        username TEXT,
         password TEXT,
         fullName TEXT,
         position TEXT,
@@ -79,7 +81,7 @@ const initDb = async () => {
 
     // สร้าง Admin เริ่มต้น
     await db.execute({
-      sql: `INSERT OR IGNORE INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
       args: ['admin_default', 'tomsound', '123456', 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin']
     });
 
