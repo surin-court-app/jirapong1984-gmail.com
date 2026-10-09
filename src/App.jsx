@@ -4,7 +4,7 @@ import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
-// ฟังก์ชันช่วยยิงข้อมูลเข้า Google Apps Script ผ่าน Hidden Form (ชัวร์ 100% ข้าม CORS และ Payload Limit)
+// ฟังก์ชันยิงข้อมูลเข้า Google Apps Script ผ่าน Hidden Form (รองรับ e.parameter.postData ชัวร์ 100%)
 const sendToGoogleScript = (payload) => {
   return new Promise((resolve) => {
     try {
@@ -332,7 +332,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ นำเข้า Excel แล้วยิงเข้า Google Sheet ด้วย Hidden Form
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -452,7 +451,6 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ บันทึกรายงานผลส่งหมายด้วย Hidden Form
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
