@@ -24,9 +24,12 @@ const db = createClient({
   authToken: dbAuthToken
 });
 
-// สร้างตารางหากยังไม่มีในระบบ
+// สร้างตารางหากยังไม่มีในระบบ (พร้อมรีเซ็ตตารางเดิมเพื่อลบข้อผิดพลาด Datatype Mismatch)
 const initDb = async () => {
   try {
+    // ลบตารางเดิมที่มีคอลัมน์ชนิดข้อมูลไม่ตรงกันออกก่อน
+    await db.execute(`DROP TABLE IF EXISTS warrants;`);
+
     await db.execute(`
       CREATE TABLE IF NOT EXISTS warrants (
         id TEXT PRIMARY KEY,
