@@ -4,7 +4,6 @@ import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
-// ฟังก์ชันยิงข้อมูลเข้า Google Apps Script ผ่าน Fetch
 const sendToGoogleScript = async (payload) => {
   try {
     await fetch(GOOGLE_SCRIPT_URL, {
@@ -42,7 +41,6 @@ export default function SurinCourtWarrantApp() {
 
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-
   const [logSearchQuery, setLogSearchQuery] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState('ALL');
 
@@ -55,10 +53,7 @@ export default function SurinCourtWarrantApp() {
     }
   });
 
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return !!localStorage.getItem('srnc_court_user');
-  });
-
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('srnc_court_user'));
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -94,7 +89,6 @@ export default function SurinCourtWarrantApp() {
   });
 
   const [currentBatchId, setCurrentBatchId] = useState(null);
-
   const [editingUserId, setEditingUserId] = useState(null);
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
@@ -131,7 +125,7 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ✅ ซิงก์ดึงข้อมูลจาก Render Backend Database และ Google Sheet
+  // ✨ ดึงข้อมูลคดีของ User ตนเองจากเซิร์ฟเวอร์ Render
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     const cleanUser = username.trim().toLowerCase();
@@ -140,53 +134,26 @@ export default function SurinCourtWarrantApp() {
     if (backup.length > 0) setCurrentRecords(backup);
 
     try {
-      // 1. ดึงจาก Render Backend Database
       const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
-      let backendWarrants = [];
       if (resBackend.ok) {
-        backendWarrants = await resBackend.json();
-      }
-
-      // 2. ดึงจาก Google Sheet Sync
-      const resGS = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
-      let gsWarrants = [];
-      if (resGS.ok) {
-        const data = await resGS.json();
-        if (Array.isArray(data)) {
-          gsWarrants = data.map(w => ({
+        const backendWarrants = await resBackend.json();
+        if (Array.isArray(backendWarrants)) {
+          const mapped = backendWarrants.map(w => ({
             ...w,
             isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
           }));
+
+          const mergedMap = new Map();
+          backup.forEach(item => mergedMap.set(item.id, item));
+          mapped.forEach(item => mergedMap.set(item.id, item));
+
+          const mergedList = Array.from(mergedMap.values());
+          setCurrentRecords(mergedList);
+          saveLocalBackup(cleanUser, mergedList);
         }
       }
-
-      const mergedMap = new Map();
-      backup.forEach(item => mergedMap.set(item.id, item));
-      backendWarrants.forEach(item => mergedMap.set(item.id, { ...item, isSaved: Boolean(item.isSaved) }));
-      gsWarrants.forEach(item => mergedMap.set(item.id, item));
-
-      const mergedList = Array.from(mergedMap.values());
-      setCurrentRecords(mergedList);
-      saveLocalBackup(cleanUser, mergedList);
     } catch (e) { 
       console.error("Fetch Warrants Sync Error:", e); 
-    }
-  };
-
-  // ✅ บันทึกข้อมูลคดีขึ้น Render Backend
-  const syncBatchToBackend = async (records) => {
-    if (!currentUser || !Array.isArray(records) || records.length === 0) return;
-    try {
-      await fetch(`${API_URL}/warrants/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: currentUser.username,
-          records: records
-        })
-      });
-    } catch (e) {
-      console.error("Backend Sync Batch Error:", e);
     }
   };
 
@@ -251,7 +218,6 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  // ✅ ปรับขนาดภาพให้เล็กลงอัตโนมัติ (400x400 คุณภาพ 0.3)
   const compressImage = (file, maxWidth = 400, maxHeight = 400, quality = 0.3) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -335,6 +301,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ✨ นำเข้าไฟล์ Excel แล้วบันทึกลง Render Server ทันที
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -418,12 +385,21 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          // ✅ บันทึกลง Render Backend และ Google Sheet
-          await syncBatchToBackend(parsedRecords);
+          // ✨ บันทึกลง Render Server อัตโนมัติเพื่อให้มือถือดึงไปแสดงผล
+          await fetch(`${API_URL}/warrants/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: activeUsername,
+              records: parsedRecords
+            })
+          });
+
+          // ส่งข้อมูลบันทึกลง Google Sheet ด้วย
           await sendToGoogleScript({ action: 'saveBatch', records: parsedRecords });
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์เข้าเซิร์ฟเวอร์และ Google Sheet สำเร็จ ${parsedRecords.length} รายการ (เปิดดูจากโทรศัพท์มือถือได้ทันที)`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์เข้าเซิร์ฟเวอร์สำเร็จ ${parsedRecords.length} รายการ (เปิดดูจากโทรศัพท์มือถือได้ทันที)`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
@@ -455,7 +431,6 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ บันทึกรายงานผล (ซิงก์ทั้ง Render Backend และ Google Sheet)
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -479,14 +454,22 @@ export default function SurinCourtWarrantApp() {
     saveLocalBackup(activeUsername, updatedList);
 
     try {
-      await syncBatchToBackend([updatedRecord]);
+      await fetch(`${API_URL}/warrants/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: activeUsername,
+          records: [updatedRecord]
+        })
+      });
+
       await sendToGoogleScript({ action: 'saveBatch', records: [updatedRecord] });
 
       await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
-      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จ! ระบบได้ซิงก์ข้อมูลลง Google Sheet และจัดเก็บรูปภาพเข้า Google Drive เรียบร้อยแล้ว`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จ! ระบบได้ซิงก์ข้อมูลลง Google Sheet และเซิร์ฟเวอร์เรียบร้อยแล้ว`);
     } catch (err) { 
       console.error(err);
-      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว`);
     }
   };
 
@@ -1877,7 +1860,6 @@ export default function SurinCourtWarrantApp() {
                   บันทึกการปิดหมาย / คำบังคับ
                 </div>
 
-                {/* ส่วนหัวฝั่งขวา */}
                 <div className="flex justify-end mb-3">
                   <div className="w-80 space-y-1 text-right text-sm">
                     <div className="pr-2">
@@ -1888,7 +1870,6 @@ export default function SurinCourtWarrantApp() {
                   </div>
                 </div>
 
-                {/* เนื้อหาบันทึก */}
                 <div className="space-y-2 text-justify leading-relaxed text-sm">
                   <div>
                     เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span>
@@ -1918,7 +1899,6 @@ export default function SurinCourtWarrantApp() {
                     จึงบันทึกไว้เป็นหลักฐาน
                   </div>
 
-                  {/* ผู้บันทึก / ลายเซ็น */}
                   <div className="flex flex-col items-end pt-2 space-y-2">
                     <div className="text-center space-y-1 pr-6">
                       <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
@@ -1932,7 +1912,6 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* แสดงรูปถ่ายสถานที่ 4 รูป (2x2 Grid เต็มความกว้าง) */}
               <div className="mt-3">
                 {formData.photos && formData.photos.length > 0 ? (
                   <div className="grid grid-cols-2 gap-2 w-full">
