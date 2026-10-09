@@ -5,7 +5,6 @@ import * as XLSX from 'xlsx';
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby20-gT1v7mAORr8RBPDVpu13wnP7P1VK1x-U2Anz2Uw4F68T0uJFG9qTMTQp45EgAE/exec';
 
-// ฟังก์ชันส่งข้อมูลหา Google Apps Script ผ่าน Fetch
 const sendToGoogleScript = async (payload) => {
   try {
     await fetch(GOOGLE_SCRIPT_URL, {
@@ -38,6 +37,7 @@ export default function SurinCourtWarrantApp() {
     "ส่งไม่ได้เนื่องจากจ่าหน้าไม่ชัดเจน/รหัสไปรษณีย์ไม่ถูกต้อง"
   ];
 
+  const [activeTab, setActiveTab] = useState('form'); // 'form', 'audit', 'users'
   const [currentUser, setCurrentUser] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [warrantRecords, setWarrantRecords] = useState([]);
@@ -45,6 +45,7 @@ export default function SurinCourtWarrantApp() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [syncingServer, setSyncingServer] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
 
   // ฟอร์มเข้าสู่ระบบ
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
@@ -72,7 +73,7 @@ export default function SurinCourtWarrantApp() {
     photos: []
   });
 
-  // 1. โหลดข้อมูลผู้ใช้ที่เคยล็อกอินไว้
+  // โหลดผู้ใช้
   useEffect(() => {
     const savedUser = localStorage.getItem('surin_court_user');
     if (savedUser) {
@@ -80,14 +81,13 @@ export default function SurinCourtWarrantApp() {
     }
   }, []);
 
-  // 2. โหลดรายชื่อผู้ใช้งานทั้งหมด (ถ้าเป็น Admin)
   useEffect(() => {
     if (currentUser?.role === 'admin') {
       fetchUsers();
     }
   }, [currentUser]);
 
-  // 3. ✨ ดึงข้อมูลรายการคดีของ User ตนเองจาก Server อัตโนมัติเมื่อเปลี่ยนผู้ใช้/โหลดหน้าเว็บ
+  // ดึงข้อมูลรายการคดีของ User ตนเองจาก Server อัตโนมัติเมื่อเปิดแอป
   useEffect(() => {
     if (currentUser?.username) {
       loadWarrantsFromServer(currentUser.username);
@@ -106,7 +106,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ดึงข้อมูลรายการคดีผูกตาม User จากส่วนกลาง (Turso/SQLite Server)
   const loadWarrantsFromServer = async (username) => {
     setLoading(true);
     try {
@@ -124,13 +123,12 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // บันทึกซิงก์ข้อมูลรายการคดีผูกตาม User ขึ้นส่วนกลางทันที
   const syncWarrantsToBackend = async (records, username) => {
     const targetUser = username || currentUser?.username;
     if (!targetUser || !Array.isArray(records)) return;
 
     try {
-      const res = await fetch(`${API_URL}/warrants/batch`, {
+      await fetch(`${API_URL}/warrants/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,15 +136,11 @@ export default function SurinCourtWarrantApp() {
           records: records
         })
       });
-      const data = await res.json();
-      return data;
     } catch (err) {
       console.error("Sync to backend error:", err);
-      return null;
     }
   };
 
-  // เข้าสู่ระบบ
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -169,14 +163,33 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ออกจากระบบ
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('surin_court_user');
     setWarrantRecords([]);
   };
 
-  // นำเข้าไฟล์ Excel บัญชีหมายศาล (ปรับ ID ป้องกันซ้ำ + ซิงก์ดึงข้อมูลจาก Server ทันที)
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_URL}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userForm)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert("เพิ่มผู้ใช้งานสำเร็จ");
+        setUserForm({ username: '', password: '', fullName: '', position: '', role: 'user' });
+        fetchUsers();
+      } else {
+        alert(data.message || "เกิดข้อผิดพลาดในการเพิ่มผู้ใช้");
+      }
+    } catch (err) {
+      alert("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    }
+  };
+
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -193,17 +206,13 @@ export default function SurinCourtWarrantApp() {
 
         const nowTs = Date.now();
         const newRecords = rawData.map((row, index) => {
-          const blackNoVal = row['เลขดำที่'] || row['หมายเลขคดีดำ'] || '';
-          const targetNameVal = row['ชื่อจำเลย'] || row['หมายถึงใคร'] || '';
-          // สร้าง ID เอกลักษณ์เฉพาะรายการ เพื่อป้องกัน ID ซ้ำกันใน Database
           const uniqueId = `warrant_${currentUser.username}_${nowTs}_${index}_${Math.random().toString(36).substr(2, 5)}`;
-
           return {
             id: uniqueId,
-            blackNo: String(blackNoVal),
+            blackNo: String(row['เลขดำที่'] || row['หมายเลขคดีดำ'] || ''),
             redNo: String(row['เลขแดงที่'] || row['หมายเลขคดีแดง'] || ''),
             warrantType: String(row['ประเภทหมาย'] || row['หมายอะไร'] || 'หมายนัด'),
-            targetName: String(targetNameVal),
+            targetName: String(row['ชื่อจำเลย'] || row['หมายถึงใคร'] || ''),
             address: String(row['ที่อยู่'] || ''),
             subdistrict: String(row['ตำบล'] || ''),
             district: String(row['อำเภอ'] || 'เมืองสุรินทร์'),
@@ -219,13 +228,12 @@ export default function SurinCourtWarrantApp() {
           };
         });
 
-        // 1. บันทึกขึ้นเซิร์ฟเวอร์กลางทันที
+        // 1. ส่งขึ้น Server ซิงก์ทันที
         await syncWarrantsToBackend(newRecords, currentUser.username);
-        
-        // 2. ดึงข้อมูลจริงจาก Server กลับมาอัปเดตหน้าจอทันที
+        // 2. ดึงข้อมูลจริงกลับมาแสดงผล
         await loadWarrantsFromServer(currentUser.username);
 
-        alert(`อัปโหลดและบันทึกคดีเรียบร้อยจำนวน ${newRecords.length} รายการ (เปิดดูได้จากทั้งคอมพิวเตอร์และมือถือทันที)`);
+        alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์เข้า Google Sheet 'srnccourtrider' สำเร็จ ${newRecords.length} รายการ`);
       } catch (err) {
         alert("เกิดข้อผิดพลาดในการอ่านไฟล์ Excel");
       } finally {
@@ -235,7 +243,6 @@ export default function SurinCourtWarrantApp() {
     reader.readAsBinaryString(file);
   };
 
-  // เลือกรายการคดีมากรอกข้อมูล
   const handleSelectWarrant = (record) => {
     setSelectedWarrantId(record.id);
     setFormData({
@@ -257,7 +264,6 @@ export default function SurinCourtWarrantApp() {
     });
   };
 
-  // อัปโหลดและบีบอัดรูปภาพ
   const handlePhotoUpload = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -294,7 +300,6 @@ export default function SurinCourtWarrantApp() {
     });
   };
 
-  // บันทึกและซิงก์ข้อมูลส่ง Google Sheet / Drive และ Server
   const handleSaveAndSync = async () => {
     if (!selectedWarrantId) {
       alert("กรุณาเลือกรายการคดีที่ต้องการบันทึกข้อมูลก่อน");
@@ -309,21 +314,17 @@ export default function SurinCourtWarrantApp() {
         isSaved: 1
       };
 
-      // 1. อัปเดตข้อมูลในสเตตหน้าจอ
       const updatedList = warrantRecords.map(item => item.id === selectedWarrantId ? updatedRecord : item);
       setWarrantRecords(updatedList);
 
-      // 2. ส่งซิงก์ไป Google Apps Script (ลง Sheet + Drive)
       const payload = {
         warrant: updatedRecord,
         sender: currentUser
       };
       await sendToGoogleScript(payload);
-
-      // 3. ซิงก์ขึ้น Server ส่วนกลาง (Turso/SQLite)
       await syncWarrantsToBackend([updatedRecord], currentUser.username);
 
-      alert(`บันทึกรายงานผลส่งหมาย "${updatedRecord.targetName}" เรียบร้อยแล้ว! ข้อมูลและลิงก์รูปภาพซิงก์ลง Google Sheet, Google Drive และเซิร์ฟเวอร์กลางเรียบร้อยแล้ว`);
+      alert(`บันทึกรายงานผลส่งหมาย "${updatedRecord.targetName}" สำเร็จ! ระบบได้ซิงก์ข้อมูลลง Google Sheet และจัดเก็บรูปภาพเข้า Google Drive โฟลเดอร์ Warrant_Photos เรียบร้อยแล้ว`);
     } catch (err) {
       alert("เกิดข้อผิดพลาดในการบันทึกซิงก์ข้อมูล");
     } finally {
@@ -331,7 +332,27 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ค้นหารายการคดี
+  const handleResetForm = () => {
+    setSelectedWarrantId('');
+    setFormData({
+      blackNo: '',
+      redNo: '',
+      warrantType: 'หมายนัด',
+      price: '',
+      targetName: '',
+      sendDate: new Date().toISOString().split('T')[0],
+      sendTime: getCurrentTimeStr(),
+      address: '',
+      subdistrict: '',
+      district: 'เมืองสุรินทร์',
+      province: 'สุรินทร์',
+      zipcode: '32000',
+      warrantResult: 'ส่งได้โดยวิธีปิดหมาย',
+      gps: '',
+      photos: []
+    });
+  };
+
   const filteredWarrants = warrantRecords.filter(item => {
     const term = searchTerm.toLowerCase();
     return (
@@ -341,10 +362,13 @@ export default function SurinCourtWarrantApp() {
     );
   });
 
+  const pendingCount = warrantRecords.filter(r => !r.isSaved).length;
+  const reportedCount = warrantRecords.filter(r => r.isSaved).length;
+
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-amber-950 flex items-center justify-center p-4">
-        <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl backdrop-blur-md">
+      <div className="min-h-screen bg-gradient-to-br from-amber-950 via-amber-900 to-amber-950 flex items-center justify-center p-4">
+        <div className="bg-amber-950/90 border border-amber-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl backdrop-blur-md">
           <div className="text-center mb-8">
             <div className="inline-flex p-3 bg-amber-500/10 rounded-full border border-amber-500/20 mb-3">
               <Landmark className="w-12 h-12 text-amber-400" />
@@ -364,11 +388,11 @@ export default function SurinCourtWarrantApp() {
             <div>
               <label className="block text-xs font-medium text-amber-200/80 mb-1">USERNAME</label>
               <div className="relative">
-                <User className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <User className="w-5 h-5 text-amber-500/50 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
-                  className="w-full bg-slate-800/80 border border-slate-700 rounded-lg pl-10 pr-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 text-sm"
+                  className="w-full bg-amber-900/50 border border-amber-700/50 rounded-lg pl-10 pr-4 py-2.5 text-amber-100 placeholder-amber-700 focus:outline-none focus:border-amber-500 text-sm"
                   placeholder="กรอกชื่อผู้ใช้งาน"
                   value={loginForm.username}
                   onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
@@ -379,11 +403,11 @@ export default function SurinCourtWarrantApp() {
             <div>
               <label className="block text-xs font-medium text-amber-200/80 mb-1">PASSWORD</label>
               <div className="relative">
-                <Lock className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Lock className="w-5 h-5 text-amber-500/50 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   required
-                  className="w-full bg-slate-800/80 border border-slate-700 rounded-lg pl-10 pr-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 text-sm"
+                  className="w-full bg-amber-900/50 border border-amber-700/50 rounded-lg pl-10 pr-4 py-2.5 text-amber-100 placeholder-amber-700 focus:outline-none focus:border-amber-500 text-sm"
                   placeholder="กรอกรหัสผ่าน"
                   value={loginForm.password}
                   onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
@@ -393,7 +417,7 @@ export default function SurinCourtWarrantApp() {
 
             <button
               type="submit"
-              className="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2.5 rounded-lg transition-all shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2"
+              className="w-full bg-amber-700 hover:bg-amber-600 text-white font-medium py-2.5 rounded-lg transition-all shadow-lg shadow-amber-900/50 flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>เข้าสู่ระบบ</span>
@@ -405,207 +429,432 @@ export default function SurinCourtWarrantApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans pb-12">
-      {/* Header */}
-      <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 border-b border-amber-500/30">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Landmark className="w-8 h-8 text-amber-400" />
-            <div>
-              <h1 className="font-bold text-amber-100 text-base leading-tight">ศาลจังหวัดสุรินทร์</h1>
-              <p className="text-xs text-slate-400">ระบบซิงก์ข้อมูลส่งหมายศาล</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => loadWarrantsFromServer(currentUser.username)}
-              className="p-2 text-slate-300 hover:text-amber-400 hover:bg-slate-800 rounded-lg transition"
-              title="ดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์กลาง"
-            >
-              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin text-amber-400' : ''}`} />
-            </button>
-
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-semibold text-amber-200">{currentUser.fullName}</p>
-              <p className="text-xs text-slate-400">{currentUser.position} ({currentUser.role})</p>
+    <div className="min-h-screen bg-amber-50/30 font-sans pb-12">
+      {/* Header Banner แบบเดิม */}
+      <div className="bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 text-white shadow-xl border-b-4 border-amber-600">
+        <div className="max-w-5xl mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4 text-center md:text-left">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
+                <Landmark className="w-12 h-12 text-amber-400" />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-amber-100 tracking-wide">
+                  ระบบบันทึกและติดตามการส่งหมายศาล
+                </h1>
+                <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
+                  <span className="text-sm font-semibold text-amber-300">ศาลจังหวัดสุรินทร์</span>
+                  <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Google Sheets Sync Online
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition"
-              title="ออกจากระบบ"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        
-        {/* Banner ข้อมูลผู้ใช้ */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-700">
-              <ListOrdered className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">จัดการข้อมูลหมายคดี - บัญชี {currentUser.fullName} ({currentUser.username})</h2>
-              <p className="text-xs text-slate-500">อัปโหลดไฟล์ Excel จากเครื่องใดก็ได้ ข้อมูลจะซิงก์ดึงมาแสดงทั้งคอมพิวเตอร์และมือถือตรงกัน 100%</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <label className="flex-1 md:flex-none cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition shadow-sm flex items-center justify-center gap-2">
-              <Download className="w-4 h-4" />
-              <span>เลือกไฟล์ Excel บัญชีหมายศาล</span>
-              <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleExcelUpload} />
-            </label>
-          </div>
-        </div>
-
-        {/* ค้นหาและรายการคดี */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <input
-              type="text"
-              placeholder="พิมพ์ค้นหาเลขดำ, เลขแดง, ชื่อจำเลย..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-amber-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          {filteredWarrants.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-sm">
-              ยังไม่มีรายการคดีในบัญชีของ {currentUser.fullName} (กดนำเข้าไฟล์ Excel เพื่อเริ่มใช้งาน)
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-1">
-              {filteredWarrants.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => handleSelectWarrant(item)}
-                  className={`p-3 rounded-lg border text-sm cursor-pointer transition ${
-                    selectedWarrantId === item.id
-                      ? 'border-amber-500 bg-amber-50/50 shadow-sm'
-                      : item.isSaved
-                      ? 'border-emerald-200 bg-emerald-50/30'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+            {/* แท็บเมนูแบบเดิม */}
+            <div className="flex items-center gap-2 bg-slate-800/80 p-1.5 rounded-xl border border-amber-500/30">
+              <button
+                onClick={() => setActiveTab('form')}
+                className={`px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition flex items-center gap-1.5 ${
+                  activeTab === 'form' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <FileText className="w-4 h-4" /> ฟอร์มบันทึกหมาย
+              </button>
+              
+              {currentUser?.role === 'admin' && (
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className={`px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition flex items-center gap-1.5 ${
+                    activeTab === 'users' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <div className="flex items-center justify-between font-semibold text-slate-800">
-                    <span>ดำ: {item.blackNo || '-'}</span>
-                    <span className="text-red-600">แดง: {item.redNo || '-'}</span>
-                  </div>
-                  <div className="text-xs text-slate-600 mt-1 truncate">ถึง: {item.targetName}</div>
-                  <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400">
-                    <span>{item.warrantType}</span>
-                    {item.isSaved ? (
-                      <span className="text-emerald-600 font-medium flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> รายงานแล้ว
-                      </span>
-                    ) : (
-                      <span className="text-amber-600 font-medium">รอดำเนินการ</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                  <Users className="w-4 h-4" /> จัดการผู้ใช้งาน ({usersList.length})
+                </button>
+              )}
 
-        {/* ฟอร์มกรอกข้อมูลส่งหมาย */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-          <h3 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-amber-600" />
-            <span>1. ข้อมูลคดีและรายละเอียดหมาย</span>
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">เลขดำที่</label>
-              <input
-                type="text"
-                className="w-full border border-slate-200 rounded-lg p-2 bg-slate-50"
-                value={formData.blackNo}
-                onChange={(e) => setFormData({ ...formData, blackNo: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">เลขแดงที่</label>
-              <input
-                type="text"
-                className="w-full border border-slate-200 rounded-lg p-2 bg-slate-50"
-                value={formData.redNo}
-                onChange={(e) => setFormData({ ...formData, redNo: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">หมายถึงใคร (จำเลย)</label>
-              <input
-                type="text"
-                className="w-full border border-slate-200 rounded-lg p-2 bg-slate-50"
-                value={formData.targetName}
-                onChange={(e) => setFormData({ ...formData, targetName: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <h3 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2 pt-2">
-            <User className="w-5 h-5 text-amber-600" />
-            <span>2. รายละเอียดผลการส่งหมาย</span>
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">วิธีการส่งหมาย</label>
-              <select
-                className="w-full border border-slate-200 rounded-lg p-2 bg-slate-50"
-                value={formData.warrantResult}
-                onChange={(e) => setFormData({ ...formData, warrantResult: e.target.value })}
+              <button
+                onClick={handleLogout}
+                className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700/50 rounded-lg transition"
+                title="ออกจากระบบ"
               >
-                {warrantResultOptions.map((opt, i) => (
-                  <option key={i} value={opt}>{opt}</option>
-                ))}
-              </select>
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">แนบรูปถ่ายสถานที่ส่งหมาย</label>
-              <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg p-2 flex items-center justify-center gap-2 text-slate-700 text-xs">
-                <Camera className="w-4 h-4 text-amber-600" />
-                <span>เลือกรูปถ่ายสถานที่ ({formData.photos.length} รูป)</span>
-                <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-              </label>
-            </div>
-          </div>
-
-          {/* แสดงพรีวิวรูปถ่าย */}
-          {formData.photos.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              {formData.photos.map((imgSrc, idx) => (
-                <div key={idx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100">
-                  <img src={imgSrc} alt={`photo-${idx}`} className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ปุ่มบันทึกซิงก์ */}
-          <div className="pt-4">
-            <button
-              onClick={handleSaveAndSync}
-              disabled={syncingServer}
-              className="w-full bg-amber-800 hover:bg-amber-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-amber-900/10 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <CheckCircle2 className="w-5 h-5" />
-              <span>{syncingServer ? 'กำลังบันทึกและซิงก์ข้อมูล...' : 'บันทึกข้อมูลซิงก์ Server (srnccourtrider)'}</span>
-            </button>
           </div>
         </div>
+      </div>
+
+      {/* Main Content */}
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        {activeTab === 'form' && (
+          <div className="space-y-6">
+            
+            {/* กล่องการ์ดสีเหลืองแบบเดิม */}
+            <div className="bg-amber-50/80 border-2 border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
+                  <ListOrdered className="w-6 h-6 text-amber-700" />
+                  <span>จัดการข้อมูลหมายคดี - บัญชี {currentUser.fullName} ({currentUser.username})</span>
+                </h2>
+              </div>
+
+              {/* ปุ่มส้ม ฟ้า เขียว แบบเดิม 100% */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  onClick={() => loadWarrantsFromServer(currentUser.username)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm"
+                >
+                  <FolderOpen className="w-5 h-5" />
+                  <span>คลังโฟลเดอร์ย้อนหลัง</span>
+                </button>
+
+                <button
+                  onClick={handleResetForm}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>กรอกข้อมูลเอง (ล้างฟอร์มใหม่)</span>
+                </button>
+
+                <label className="cursor-pointer bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm">
+                  <Download className="w-5 h-5" />
+                  <span>เลือกไฟล์ Excel บัญชีหมายศาล</span>
+                  <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleExcelUpload} />
+                </label>
+              </div>
+
+              {/* ช่องค้นหา + แท็บรอดำเนินการ / รายงานแล้ว */}
+              <div className="space-y-3 pt-2">
+                <input
+                  type="text"
+                  placeholder="พิมพ์ค้นหาเลขดำ, เลขแดง, ชื่อ..."
+                  className="w-full bg-white border border-amber-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-600 shadow-inner"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-amber-900 text-white p-3 rounded-xl text-center shadow-inner">
+                    <span className="text-xs opacity-80 block">รอดำเนินการ</span>
+                    <span className="text-xl font-bold">({pendingCount})</span>
+                  </div>
+                  <div className="bg-amber-100 text-amber-900 border border-amber-300 p-3 rounded-xl text-center">
+                    <span className="text-xs font-semibold block">รายงานแล้ว</span>
+                    <span className="text-xl font-bold">({reportedCount})</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* รายการคดี */}
+              {filteredWarrants.length === 0 ? (
+                <div className="text-center py-6 text-amber-800/60 text-sm font-medium border border-dashed border-amber-300 rounded-xl bg-white/50">
+                  ยังไม่มีรายการคดีในบัญชีของ {currentUser.fullName}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
+                  {filteredWarrants.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleSelectWarrant(item)}
+                      className={`p-3 rounded-xl border-2 text-sm cursor-pointer transition ${
+                        selectedWarrantId === item.id
+                          ? 'border-amber-600 bg-amber-100/80 shadow-md'
+                          : item.isSaved
+                          ? 'border-emerald-300 bg-emerald-50/50'
+                          : 'border-amber-200 bg-white hover:border-amber-400'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span>ดำ: {item.blackNo || '-'}</span>
+                        <span className="text-red-600">แดง: {item.redNo || '-'}</span>
+                      </div>
+                      <div className="text-xs text-slate-600 mt-1 truncate">ถึง: {item.targetName}</div>
+                      <div className="flex items-center justify-between mt-2 text-[11px] text-slate-500">
+                        <span>{item.warrantType}</span>
+                        {item.isSaved ? (
+                          <span className="text-emerald-700 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> รายงานแล้ว
+                          </span>
+                        ) : (
+                          <span className="text-amber-700 font-bold">รอดำเนินการ</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ฟอร์มกรอกข้อมูลหมาย (หัวข้อ 1 และ 2 แบบเดิม) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-6 space-y-6">
+              
+              {/* หัวข้อ 1 */}
+              <div>
+                <h3 className="text-lg font-bold text-amber-900 border-b-2 border-amber-100 pb-2 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-amber-700" />
+                  <span>1. ข้อมูลคดีและรายละเอียดหมาย</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-sm">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">เลขดำที่</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600"
+                      value={formData.blackNo}
+                      onChange={(e) => setFormData({ ...formData, blackNo: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">เลขแดงที่</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600"
+                      value={formData.redNo}
+                      onChange={(e) => setFormData({ ...formData, redNo: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">หมายอะไร</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600"
+                      value={formData.warrantType}
+                      onChange={(e) => setFormData({ ...formData, warrantType: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">ราคา/ค่านำส่ง (บาท)</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600"
+                      value={formData.price}
+                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* หัวข้อ 2 */}
+              <div>
+                <h3 className="text-lg font-bold text-amber-900 border-b-2 border-amber-100 pb-2 flex items-center gap-2">
+                  <User className="w-5 h-5 text-amber-700" />
+                  <span>2. รายละเอียดผู้รับหมายและสถานที่นำส่ง</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 text-sm">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">หมายถึงใคร (ชื่อ-นามสกุล)</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600"
+                      value={formData.targetName}
+                      onChange={(e) => setFormData({ ...formData, targetName: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">วันที่ส่งหมาย</label>
+                    <input
+                      type="date"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600"
+                      value={formData.sendDate}
+                      onChange={(e) => setFormData({ ...formData, sendDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">เวลาที่ส่งหมาย (น.)</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600"
+                      value={formData.sendTime}
+                      onChange={(e) => setFormData({ ...formData, sendTime: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">ที่อยู่ / บ้านเลขที่ / ถนน / หมู่บ้าน</label>
+                  <textarea
+                    rows="2"
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:border-amber-600 text-sm"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">อำเภอ</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                      value={formData.district}
+                      onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">ตำบล</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                      value={formData.subdistrict}
+                      onChange={(e) => setFormData({ ...formData, subdistrict: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">จังหวัด</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                      value={formData.province}
+                      onChange={(e) => setFormData({ ...formData, province: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">รหัสไปรษณีย์</label>
+                    <input
+                      type="text"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                      value={formData.zipcode}
+                      onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">วิธีการส่งหมาย</label>
+                  <select
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 text-sm font-medium"
+                    value={formData.warrantResult}
+                    onChange={(e) => setFormData({ ...formData, warrantResult: e.target.value })}
+                  >
+                    {warrantResultOptions.map((opt, i) => (
+                      <option key={i} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* แนบรูปภาพ */}
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">รูปถ่ายสถานที่ส่งหมาย</label>
+                  <label className="cursor-pointer border-2 border-dashed border-amber-300 hover:border-amber-500 rounded-xl p-4 bg-amber-50/50 flex flex-col items-center justify-center gap-1 text-slate-600 transition">
+                    <Camera className="w-8 h-8 text-amber-600" />
+                    <span className="text-xs font-bold">เลือกรูปถ่ายสถานที่ ({formData.photos.length} รูป)</span>
+                    <input type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                  </label>
+                </div>
+
+                {formData.photos.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                    {formData.photos.map((imgSrc, idx) => (
+                      <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 shadow-sm">
+                        <img src={imgSrc} alt={`photo-${idx}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ปุ่มบันทึกซิงก์สีน้ำตาลส้มแบบเดิม 100% */}
+              <div className="pt-4">
+                <button
+                  onClick={handleSaveAndSync}
+                  disabled={syncingServer}
+                  className="w-full bg-amber-900 hover:bg-amber-800 text-white font-bold py-4 rounded-xl transition shadow-xl shadow-amber-950/20 flex items-center justify-center gap-2 disabled:opacity-50 text-base"
+                >
+                  <CheckCircle2 className="w-6 h-6 text-amber-400" />
+                  <span>{syncingServer ? 'กำลังบันทึกและซิงก์ข้อมูล...' : 'บันทึกข้อมูลซิงก์ Server (srnccourtrider)'}</span>
+                </button>
+              </div>
+
+              {/* ปุ่มดาวน์โหลด Word, พิมพ์รายงาน PDF แบบเดิม */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <button className="bg-indigo-700 hover:bg-indigo-800 text-white font-medium py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow">
+                  <Download className="w-4 h-4" /> ดาวน์โหลดเอกสาร (Word)
+                </button>
+                <button className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow">
+                  <Printer className="w-4 h-4" /> พิมพ์รายงาน (PDF)
+                </button>
+                <button className="bg-emerald-800 hover:bg-emerald-900 text-white font-medium py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow">
+                  <Printer className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({warrantRecords.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* แท็บจัดการผู้ใช้งาน (สำหรับ Admin) */}
+        {activeTab === 'users' && currentUser?.role === 'admin' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-6 space-y-6">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <UserPlus className="w-5 h-5 text-amber-700" />
+              <span>เพิ่มผู้ใช้งานระบบใหม่</span>
+            </h3>
+
+            <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Username</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                  value={userForm.username}
+                  onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                  value={userForm.password}
+                  onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">ชื่อ-นามสกุล</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                  value={userForm.fullName}
+                  onChange={(e) => setUserForm({ ...userForm, fullName: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">ตำแหน่ง</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                  value={userForm.position}
+                  onChange={(e) => setUserForm({ ...userForm, position: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">สิทธิ์การใช้งาน</label>
+                <select
+                  className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50"
+                  value={userForm.role}
+                  onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                >
+                  <option value="user">เจ้าพนักงานเดินหมาย (User)</option>
+                  <option value="admin">ผู้ดูแลระบบ (Admin)</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  className="w-full bg-amber-700 hover:bg-amber-600 text-white font-bold py-2.5 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> เพิ่มผู้ใช้
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </main>
     </div>
   );
