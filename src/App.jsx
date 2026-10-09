@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzDKn7sgNkC0TwieKldHExNQycBdd4qrSXEbAhUo7oPIv7HClX7qpjx3Y5zRheM58RYPA/exec';
+// ✅ อัปเดต GOOGLE_SCRIPT_URL เป็นเวอร์ชันใหม่ล่าสุด
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
 export default function SurinCourtWarrantApp() {
   const getCurrentTimeStr = () => {
@@ -296,7 +297,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✅ ปรับแก้การนำเข้า Excel ส่งข้อมูลด้วย text/plain เพื่อข้าม CORS
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -380,7 +380,6 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          // ส่งข้อมูลลง Google Sheet srnccourtrider ผ่าน text/plain
           try {
             await fetch(GOOGLE_SCRIPT_URL, {
               method: 'POST',
@@ -422,7 +421,6 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ ปรับแก้การบันทึกรายงานผล ส่งรูปภาพและข้อมูลผ่าน text/plain ข้ามขีดจำกัด CORS
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
