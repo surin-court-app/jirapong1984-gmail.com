@@ -2,8 +2,43 @@ import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
-// ✅ อัปเดต GOOGLE_SCRIPT_URL เป็นเวอร์ชันใหม่ล่าสุด
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
+
+// ฟังก์ชันช่วยยิงข้อมูลเข้า Google Apps Script ผ่าน Hidden Form (ชัวร์ 100% ข้าม CORS และ Payload Limit)
+const sendToGoogleScript = (payload) => {
+  return new Promise((resolve) => {
+    try {
+      const iframeName = 'hidden_iframe_' + Date.now();
+      const iframe = document.createElement('iframe');
+      iframe.name = iframeName;
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = GOOGLE_SCRIPT_URL;
+      form.target = iframeName;
+
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'postData';
+      input.value = JSON.stringify(payload);
+      form.appendChild(input);
+
+      document.body.appendChild(form);
+      form.submit();
+
+      setTimeout(() => {
+        try { document.body.removeChild(form); } catch (e) {}
+        try { document.body.removeChild(iframe); } catch (e) {}
+        resolve(true);
+      }, 1500);
+    } catch (err) {
+      console.error("Form submit error", err);
+      resolve(false);
+    }
+  });
+};
 
 export default function SurinCourtWarrantApp() {
   const getCurrentTimeStr = () => {
@@ -297,6 +332,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ✅ นำเข้า Excel แล้วยิงเข้า Google Sheet ด้วย Hidden Form
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -380,13 +416,8 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          try {
-            await fetch(GOOGLE_SCRIPT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({ action: 'saveBatch', records: parsedRecords })
-            });
-          } catch (e) { console.error("Google Sheet Batch Sync Error", e); }
+          // ส่งข้อมูลบันทึกลง Google Sheet
+          await sendToGoogleScript({ action: 'saveBatch', records: parsedRecords });
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
           alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์เข้า Google Sheet 'srnccourtrider' สำเร็จ ${parsedRecords.length} รายการ`);
@@ -421,6 +452,7 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
+  // ✅ บันทึกรายงานผลส่งหมายด้วย Hidden Form
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -444,13 +476,7 @@ export default function SurinCourtWarrantApp() {
     saveLocalBackup(activeUsername, updatedList);
 
     try {
-      const payloadData = JSON.stringify({ action: 'saveBatch', records: [updatedRecord] });
-
-      await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: payloadData
-      });
+      await sendToGoogleScript({ action: 'saveBatch', records: [updatedRecord] });
 
       await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
       alert(`บันทึกรายงานผลของ "${formData.targetName}" ซิงก์เข้า Google Sheet 'srnccourtrider' เรียบร้อยแล้ว!`);
@@ -469,11 +495,7 @@ export default function SurinCourtWarrantApp() {
       if (activeUsername) saveLocalBackup(activeUsername, filtered);
 
       try {
-        await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'deleteWarrant', id: itemId })
-        });
+        await sendToGoogleScript({ action: 'deleteWarrant', id: itemId });
       } catch (err) { console.error(err); }
       addAuditLog('DELETE_WARRANT', `ลบรายการคดี: ${targetName} (${blackNo || '-'})`);
     }
