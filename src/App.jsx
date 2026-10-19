@@ -244,7 +244,7 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 600, maxHeight = 600, quality = 0.5) => {
+  const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.6) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -504,7 +504,11 @@ export default function SurinCourtWarrantApp() {
 
     let photosHtml = '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
     if (formData.photos.length === 1) {
-      photosHtml = `<div style="text-align: center;"><img src="${formData.photos[0]}" style="max-width: 90%; max-height: 480px; object-fit: contain; margin: 0 auto; display: block;"/></div>`;
+      photosHtml = `
+        <div style="text-align: center; width: 100%;">
+          <img src="${formData.photos[0]}" style="max-width: 85%; max-height: 480px; object-fit: contain; margin: 0 auto; display: block; rounded-lg; border: 1px solid #ccc;"/>
+        </div>
+      `;
     } else if (formData.photos.length > 1) {
       let rowsHtml = '';
       for (let i = 0; i < formData.photos.length; i += 2) {
@@ -1867,7 +1871,7 @@ export default function SurinCourtWarrantApp() {
                   บันทึกการปิดหมาย / คำบังคับ
                 </div>
 
-                {/* ส่วนหัวฝั่งขวา (ซ่อนจำนวนเงินแล้ว) */}
+                {/* ส่วนหัวฝั่งขวา (ตัดค่านำส่ง/จำนวนเงินออกแล้ว 100%) */}
                 <div className="flex justify-end mb-3">
                   <div className="w-80 space-y-1 text-right text-sm">
                     <div className="pr-2 font-bold">
@@ -1922,11 +1926,11 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* เงื่อนไขแสดงรูปถ่ายสถานที่: อัปรูปเดียวให้อยู่ตรงกลางขนาดใหญ่ หากอัปหลายรูปให้จัดเรียงแบบเดิม */}
-              <div className="mt-3">
+              {/* การจัดแสดงรูปถ่าย: รูปเดียวจัดให้อยู่ตรงกลางหน้ากระดาษและขยายขนาดใหญ่ขึ้น */}
+              <div className="mt-3 w-full flex justify-center">
                 {formData.photos && formData.photos.length === 1 ? (
-                  <div className="flex justify-center items-center w-full">
-                    <div className="w-4/5 h-64 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg">
+                  <div className="w-full text-center flex justify-center items-center">
+                    <div className="w-4/5 h-72 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg mx-auto">
                       <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-cover" />
                     </div>
                   </div>
@@ -2009,10 +2013,10 @@ export default function SurinCourtWarrantApp() {
                     </div>
                   </div>
 
-                  <div className="mt-3">
+                  <div className="mt-3 w-full flex justify-center">
                     {item.photos && item.photos.length === 1 ? (
-                      <div className="flex justify-center items-center w-full">
-                        <div className="w-4/5 h-64 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg">
+                      <div className="w-full text-center flex justify-center items-center">
+                        <div className="w-4/5 h-72 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg mx-auto">
                           <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-cover" />
                         </div>
                       </div>
