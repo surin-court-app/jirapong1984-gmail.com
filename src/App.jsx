@@ -41,6 +41,7 @@ export default function SurinCourtWarrantApp() {
 
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+
   const [logSearchQuery, setLogSearchQuery] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState('ALL');
 
@@ -54,6 +55,7 @@ export default function SurinCourtWarrantApp() {
   });
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('srnc_court_user'));
+
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -89,6 +91,7 @@ export default function SurinCourtWarrantApp() {
   });
 
   const [currentBatchId, setCurrentBatchId] = useState(null);
+
   const [editingUserId, setEditingUserId] = useState(null);
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
@@ -125,7 +128,6 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
-  // ✨ ดึงข้อมูลคดีของ User ตนเองจากเซิร์ฟเวอร์ Render
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     const cleanUser = username.trim().toLowerCase();
@@ -135,25 +137,49 @@ export default function SurinCourtWarrantApp() {
 
     try {
       const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
+      let backendWarrants = [];
       if (resBackend.ok) {
-        const backendWarrants = await resBackend.json();
-        if (Array.isArray(backendWarrants)) {
-          const mapped = backendWarrants.map(w => ({
+        backendWarrants = await resBackend.json();
+      }
+
+      const resGS = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
+      let gsWarrants = [];
+      if (resGS.ok) {
+        const data = await resGS.json();
+        if (Array.isArray(data)) {
+          gsWarrants = data.map(w => ({
             ...w,
             isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
           }));
-
-          const mergedMap = new Map();
-          backup.forEach(item => mergedMap.set(item.id, item));
-          mapped.forEach(item => mergedMap.set(item.id, item));
-
-          const mergedList = Array.from(mergedMap.values());
-          setCurrentRecords(mergedList);
-          saveLocalBackup(cleanUser, mergedList);
         }
       }
+
+      const mergedMap = new Map();
+      backup.forEach(item => mergedMap.set(item.id, item));
+      backendWarrants.forEach(item => mergedMap.set(item.id, { ...item, isSaved: Boolean(item.isSaved) }));
+      gsWarrants.forEach(item => mergedMap.set(item.id, item));
+
+      const mergedList = Array.from(mergedMap.values());
+      setCurrentRecords(mergedList);
+      saveLocalBackup(cleanUser, mergedList);
     } catch (e) { 
       console.error("Fetch Warrants Sync Error:", e); 
+    }
+  };
+
+  const syncBatchToBackend = async (records) => {
+    if (!currentUser || !Array.isArray(records) || records.length === 0) return;
+    try {
+      await fetch(`${API_URL}/warrants/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: currentUser.username,
+          records: records
+        })
+      });
+    } catch (e) {
+      console.error("Backend Sync Batch Error:", e);
     }
   };
 
@@ -218,7 +244,7 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 400, maxHeight = 400, quality = 0.3) => {
+  const compressImage = (file, maxWidth = 600, maxHeight = 600, quality = 0.5) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -301,7 +327,6 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  // ✨ นำเข้าไฟล์ Excel แล้วบันทึกลง Render Server ทันที
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -385,21 +410,11 @@ export default function SurinCourtWarrantApp() {
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
-          // ✨ บันทึกลง Render Server อัตโนมัติเพื่อให้มือถือดึงไปแสดงผล
-          await fetch(`${API_URL}/warrants/batch`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username: activeUsername,
-              records: parsedRecords
-            })
-          });
-
-          // ส่งข้อมูลบันทึกลง Google Sheet ด้วย
+          await syncBatchToBackend(parsedRecords);
           await sendToGoogleScript({ action: 'saveBatch', records: parsedRecords });
 
           await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์เข้าเซิร์ฟเวอร์สำเร็จ ${parsedRecords.length} รายการ (เปิดดูจากโทรศัพท์มือถือได้ทันที)`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลสำเร็จ ${parsedRecords.length} รายการ`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
@@ -454,22 +469,14 @@ export default function SurinCourtWarrantApp() {
     saveLocalBackup(activeUsername, updatedList);
 
     try {
-      await fetch(`${API_URL}/warrants/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: activeUsername,
-          records: [updatedRecord]
-        })
-      });
-
+      await syncBatchToBackend([updatedRecord]);
       await sendToGoogleScript({ action: 'saveBatch', records: [updatedRecord] });
 
       await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
-      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จ! ระบบได้ซิงก์ข้อมูลลง Google Sheet และเซิร์ฟเวอร์เรียบร้อยแล้ว`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จ!`);
     } catch (err) { 
       console.error(err);
-      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
     }
   };
 
@@ -497,7 +504,7 @@ export default function SurinCourtWarrantApp() {
 
     let photosHtml = '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
     if (formData.photos.length === 1) {
-      photosHtml = `<img src="${formData.photos[0]}" style="max-width: 100%; max-height: 380px; object-fit: contain;"/>`;
+      photosHtml = `<div style="text-align: center;"><img src="${formData.photos[0]}" style="max-width: 90%; max-height: 480px; object-fit: contain; margin: 0 auto; display: block;"/></div>`;
     } else if (formData.photos.length > 1) {
       let rowsHtml = '';
       for (let i = 0; i < formData.photos.length; i += 2) {
@@ -538,7 +545,7 @@ export default function SurinCourtWarrantApp() {
       <body>
         <div class="title">บันทึกการปิดหมาย / คำบังคับ</div>
         <div class="right">
-          <div>ศาลจังหวัดสุรินทร์ ${formData.price ? formData.price : "๒๔๐/๒๕๖๙"}</div>
+          <div>ศาลจังหวัดสุรินทร์</div>
           <div>คดีหมายเลขดำที่ <span class="underline-dot">${formData.blackNo || "........................"}</span></div>
           <div>คดีหมายเลขแดงที่ <span class="underline-dot">${formData.redNo || "........................"}</span></div>
         </div>
@@ -1851,7 +1858,7 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 (ตรงตามแบบฉบับขวามือ 100%) */}
+        {/* แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 */}
         <div className="print-area hidden sarabun-font bg-white text-black max-w-2xl mx-auto">
           {printMode === 'single' && (
             <div className="page-single flex flex-col justify-between">
@@ -1860,16 +1867,18 @@ export default function SurinCourtWarrantApp() {
                   บันทึกการปิดหมาย / คำบังคับ
                 </div>
 
+                {/* ส่วนหัวฝั่งขวา (ซ่อนจำนวนเงินแล้ว) */}
                 <div className="flex justify-end mb-3">
                   <div className="w-80 space-y-1 text-right text-sm">
-                    <div className="pr-2">
-                      ศาลจังหวัดสุรินทร์ <span className="font-normal">{formData.price || "๒๔๐/๒๕๖๙"}</span>
+                    <div className="pr-2 font-bold">
+                      ศาลจังหวัดสุรินทร์
                     </div>
                     <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[160px] text-center font-bold">{formData.blackNo || "........................................"}</span></div>
                     <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[160px] text-center font-bold">{formData.redNo || "........................................"}</span></div>
                   </div>
                 </div>
 
+                {/* เนื้อหาบันทึก */}
                 <div className="space-y-2 text-justify leading-relaxed text-sm">
                   <div>
                     เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span>
@@ -1899,6 +1908,7 @@ export default function SurinCourtWarrantApp() {
                     จึงบันทึกไว้เป็นหลักฐาน
                   </div>
 
+                  {/* ผู้บันทึก / ลายเซ็น */}
                   <div className="flex flex-col items-end pt-2 space-y-2">
                     <div className="text-center space-y-1 pr-6">
                       <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
@@ -1912,8 +1922,15 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
+              {/* เงื่อนไขแสดงรูปถ่ายสถานที่: อัปรูปเดียวให้อยู่ตรงกลางขนาดใหญ่ หากอัปหลายรูปให้จัดเรียงแบบเดิม */}
               <div className="mt-3">
-                {formData.photos && formData.photos.length > 0 ? (
+                {formData.photos && formData.photos.length === 1 ? (
+                  <div className="flex justify-center items-center w-full">
+                    <div className="w-4/5 h-64 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg">
+                      <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                ) : formData.photos && formData.photos.length > 1 ? (
                   <div className="grid grid-cols-2 gap-2 w-full">
                     {formData.photos.slice(0, 4).map((photo, pIdx) => (
                       <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300">
@@ -1942,8 +1959,8 @@ export default function SurinCourtWarrantApp() {
 
                     <div className="flex justify-end mb-3">
                       <div className="w-80 space-y-1 text-right text-sm">
-                        <div className="pr-2">
-                          ศาลจังหวัดสุรินทร์ <span className="font-normal">{item.price || "๒๔๐/๒๕๖๙"}</span>
+                        <div className="pr-2 font-bold">
+                          ศาลจังหวัดสุรินทร์
                         </div>
                         <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[160px] text-center font-bold">{item.blackNo || "........................................"}</span></div>
                         <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[160px] text-center font-bold">{item.redNo || "........................................"}</span></div>
@@ -1993,7 +2010,13 @@ export default function SurinCourtWarrantApp() {
                   </div>
 
                   <div className="mt-3">
-                    {item.photos && item.photos.length > 0 ? (
+                    {item.photos && item.photos.length === 1 ? (
+                      <div className="flex justify-center items-center w-full">
+                        <div className="w-4/5 h-64 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg">
+                          <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-cover" />
+                        </div>
+                      </div>
+                    ) : item.photos && item.photos.length > 1 ? (
                       <div className="grid grid-cols-2 gap-2 w-full">
                         {item.photos.slice(0, 4).map((photo, pIdx) => (
                           <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300">

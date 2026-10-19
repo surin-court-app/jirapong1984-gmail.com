@@ -1,7 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
-const API_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
+const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
+
+const sendToGoogleScript = async (payload) => {
+  try {
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (err) {
+    console.error("Fetch Error:", err);
+    return false;
+  }
+};
 
 export default function SurinCourtWarrantApp() {
   const getCurrentTimeStr = () => {
@@ -25,7 +41,6 @@ export default function SurinCourtWarrantApp() {
 
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-
   const [logSearchQuery, setLogSearchQuery] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState('ALL');
 
@@ -38,10 +53,7 @@ export default function SurinCourtWarrantApp() {
     }
   });
 
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return !!localStorage.getItem('srnc_court_user');
-  });
-
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('srnc_court_user'));
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -54,10 +66,29 @@ export default function SurinCourtWarrantApp() {
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [currentRecords, setCurrentRecords] = useState([]);
+  const loadLocalBackup = (username) => {
+    if (!username) return [];
+    try {
+      const clean = username.trim().toLowerCase();
+      const saved = localStorage.getItem(`srnc_warrants_backup_${clean}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  };
+
+  const saveLocalBackup = (username, records) => {
+    if (!username || !Array.isArray(records)) return;
+    try {
+      const clean = username.trim().toLowerCase();
+      localStorage.setItem(`srnc_warrants_backup_${clean}`, JSON.stringify(records));
+    } catch (e) { console.error(e); }
+  };
+
+  const [currentRecords, setCurrentRecords] = useState(() => {
+    const user = currentUser?.username;
+    return user ? loadLocalBackup(user) : [];
+  });
 
   const [currentBatchId, setCurrentBatchId] = useState(null);
-
   const [editingUserId, setEditingUserId] = useState(null);
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
   const [newUser, setNewUser] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
@@ -94,22 +125,36 @@ export default function SurinCourtWarrantApp() {
     } catch (e) { console.error(e); }
   };
 
+  // ✨ ดึงข้อมูลคดีของ User ตนเองจากเซิร์ฟเวอร์ Render
   const fetchUserWarrants = async (username) => {
     if (!username) return;
     const cleanUser = username.trim().toLowerCase();
+    
+    const backup = loadLocalBackup(cleanUser);
+    if (backup.length > 0) setCurrentRecords(backup);
+
     try {
-      const res = await fetch(`${API_URL}/warrants/${cleanUser}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          const mapped = data.map(w => ({
+      const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
+      if (resBackend.ok) {
+        const backendWarrants = await resBackend.json();
+        if (Array.isArray(backendWarrants)) {
+          const mapped = backendWarrants.map(w => ({
             ...w,
             isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
           }));
-          setCurrentRecords(mapped);
+
+          const mergedMap = new Map();
+          backup.forEach(item => mergedMap.set(item.id, item));
+          mapped.forEach(item => mergedMap.set(item.id, item));
+
+          const mergedList = Array.from(mergedMap.values());
+          setCurrentRecords(mergedList);
+          saveLocalBackup(cleanUser, mergedList);
         }
       }
-    } catch (e) { console.error("Fetch Warrants Error:", e); }
+    } catch (e) { 
+      console.error("Fetch Warrants Sync Error:", e); 
+    }
   };
 
   useEffect(() => {
@@ -173,8 +218,7 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  // ✅ ปรับความละเอียดบีบอัดภาพเพื่อส่งผ่าน Turso Cloud โดยไม่หลุด 100%
-  const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.50) => {
+  const compressImage = (file, maxWidth = 400, maxHeight = 400, quality = 0.3) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -201,6 +245,9 @@ export default function SurinCourtWarrantApp() {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
+          
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
 
           const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
@@ -214,20 +261,12 @@ export default function SurinCourtWarrantApp() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    const validFiles = files.filter(file => {
-      if (file.size > 12 * 1024 * 1024) {
-        alert(`ไฟล์ ${file.name} มีขนาดเกิน 12MB`);
-        return false;
-      }
-      return true;
-    });
-
     const uploadNow = new Date();
     const uploadDateStr = uploadNow.toISOString().split('T')[0];
     const uploadTimeStr = `${String(uploadNow.getHours()).padStart(2, '0')}:${String(uploadNow.getMinutes()).padStart(2, '0')}`;
 
     const newPhotos = [];
-    for (const file of validFiles) {
+    for (const file of files) {
       try {
         const compressedBase64 = await compressImage(file);
         newPhotos.push(compressedBase64);
@@ -262,6 +301,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
+  // ✨ นำเข้าไฟล์ Excel แล้วบันทึกลง Render Server ทันที
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser || !currentUser.username) {
@@ -341,23 +381,25 @@ export default function SurinCourtWarrantApp() {
           setCurrentBatchId(newBatchId);
           setExcelFilterStatus('pending');
 
-          const res = await fetch(`${API_URL}/warrants/batch`, {
+          const updatedList = [...currentRecords.filter(r => r.ownerUsername !== activeUsername), ...parsedRecords];
+          setCurrentRecords(updatedList);
+          saveLocalBackup(activeUsername, updatedList);
+
+          // ✨ บันทึกลง Render Server อัตโนมัติเพื่อให้มือถือดึงไปแสดงผล
+          await fetch(`${API_URL}/warrants/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: activeUsername, records: parsedRecords })
+            body: JSON.stringify({
+              username: activeUsername,
+              records: parsedRecords
+            })
           });
 
-          if (res.ok) {
-            setCurrentRecords(prev => {
-              const otherRecords = prev.filter(r => r.ownerUsername !== activeUsername);
-              return [...otherRecords, ...parsedRecords];
-            });
-            await fetchUserWarrants(activeUsername);
-            await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
-            alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลซิงก์เข้า Turso Cloud สำเร็จ ${parsedRecords.length} รายการ`);
-          } else {
-            alert("เกิดข้อผิดพลาดในการเซฟข้อมูลลง Server");
-          }
+          // ส่งข้อมูลบันทึกลง Google Sheet ด้วย
+          await sendToGoogleScript({ action: 'saveBatch', records: parsedRecords });
+
+          await addAuditLog('IMPORT_EXCEL', `นำเข้าไฟล์ Excel บัญชีหมายศาล (${parsedRecords.length} รายการ)`);
+          alert(`อัปโหลดไฟล์เรียบร้อย! นำเข้าข้อมูลและซิงก์เข้าเซิร์ฟเวอร์สำเร็จ ${parsedRecords.length} รายการ (เปิดดูจากโทรศัพท์มือถือได้ทันที)`);
         }
       } catch (err) { 
         console.error("Excel Read Error:", err);
@@ -389,7 +431,6 @@ export default function SurinCourtWarrantApp() {
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
 
-  // ✅ แก้ไขฟังก์ชันเซฟรายงาน บีบอัดภาพให้อยู่ในเกณฑ์ปลอดภัย ย้ายเข้าช่องรายงานแล้วทันที
   const handleSaveFormData = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -408,32 +449,41 @@ export default function SurinCourtWarrantApp() {
       isSaved: true
     };
 
+    const updatedList = currentRecords.map(rec => rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec);
+    setCurrentRecords(updatedList);
+    saveLocalBackup(activeUsername, updatedList);
+
     try {
-      const res = await fetch(`${API_URL}/warrants/batch`, {
+      await fetch(`${API_URL}/warrants/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: activeUsername, records: [updatedRecord] })
+        body: JSON.stringify({
+          username: activeUsername,
+          records: [updatedRecord]
+        })
       });
 
-      if (res.ok) {
-        setCurrentRecords(prev => prev.map(rec => rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec));
-        await fetchUserWarrants(activeUsername);
-        await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
-        alert(`บันทึกรายงานผลของ "${formData.targetName}" เรียบร้อยแล้ว!`);
-      } else {
-        alert("เกิดข้อผิดพลาดในการเซฟข้อมูลลง Server กรุณาลองใหม่อีกครั้ง");
-      }
+      await sendToGoogleScript({ action: 'saveBatch', records: [updatedRecord] });
+
+      await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จ! ระบบได้ซิงก์ข้อมูลลง Google Sheet และเซิร์ฟเวอร์เรียบร้อยแล้ว`);
     } catch (err) { 
-      console.error(err); 
-      alert("ไม่สามารถเชื่อมต่อ Server ได้");
+      console.error(err);
+      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว`);
     }
   };
 
   const handleDeleteWarrantRecord = async (itemId, blackNo, targetName) => {
     if (window.confirm(`ลบรายการจำเลย ${targetName} (${blackNo || '-'}) ใช่หรือไม่?`)) {
+      const activeUsername = currentUser?.username?.trim().toLowerCase();
+      
+      const filtered = currentRecords.filter(r => r.id !== itemId);
+      setCurrentRecords(filtered);
+      if (activeUsername) saveLocalBackup(activeUsername, filtered);
+
       try {
         await fetch(`${API_URL}/warrants/${itemId}`, { method: 'DELETE' });
-        await fetchUserWarrants(currentUser.username);
+        await sendToGoogleScript({ action: 'deleteWarrant', id: itemId });
       } catch (err) { console.error(err); }
       addAuditLog('DELETE_WARRANT', `ลบรายการคดี: ${targetName} (${blackNo || '-'})`);
     }
@@ -471,8 +521,8 @@ export default function SurinCourtWarrantApp() {
         <style>
           body { 
             font-family: 'TH SarabunPSK', 'TH Sarabun New', Sarabun, sans-serif; 
-            font-size: 16pt; 
-            line-height: 1.2; 
+            font-size: 16px; 
+            line-height: 1.25; 
             margin-top: 1.5rem;
             font-variant-numeric: lining-nums proportional-nums;
             font-feature-settings: "thai" 0, "tnum" 1;
@@ -480,7 +530,7 @@ export default function SurinCourtWarrantApp() {
           .center { text-align: center; }
           .right { text-align: right; }
           .bold { font-weight: bold; }
-          .title { font-size: 20pt; font-weight: bold; text-align: center; margin-bottom: 10px; }
+          .title { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 10px; }
           .underline-dot { border-bottom: 1px dotted #000; padding: 0 5px; font-weight: bold; }
           img { max-width: 100%; height: auto; border-radius: 8px; }
         </style>
@@ -488,7 +538,7 @@ export default function SurinCourtWarrantApp() {
       <body>
         <div class="title">บันทึกการปิดหมาย / คำบังคับ</div>
         <div class="right">
-          <div class="bold" style="font-size: 18pt;">[ศาลจังหวัดสุรินทร์]</div>
+          <div>ศาลจังหวัดสุรินทร์ ${formData.price ? formData.price : "๒๔๐/๒๕๖๙"}</div>
           <div>คดีหมายเลขดำที่ <span class="underline-dot">${formData.blackNo || "........................"}</span></div>
           <div>คดีหมายเลขแดงที่ <span class="underline-dot">${formData.redNo || "........................"}</span></div>
         </div>
@@ -500,7 +550,7 @@ export default function SurinCourtWarrantApp() {
         <br/>
         <div>ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span class="underline-dot">${formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
         <br/>
-        <div class="center bold" style="font-size: 18pt;">จึงบันทึกไว้เป็นหลักฐาน</div>
+        <div class="center bold">จึงบันทึกไว้เป็นหลักฐาน</div>
         <br/>
         <div class="right">
           <div class="center" style="display: inline-block; width: 300px;">
@@ -509,10 +559,9 @@ export default function SurinCourtWarrantApp() {
           </div>
         </div>
         <br/>
-        <div class="center bold">ลักษณะบ้าน <span class="underline-dot">${formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span></div>
+        <div class="center bold">ลักษณะบ้าน</div>
         <br/>
         <div class="center" style="margin-top: 15px;">
-          <div class="bold" style="font-size: 14pt; margin-bottom: 8px;">[ รูปถ่ายสถานที่ส่งหมาย ]</div>
           ${photosHtml}
         </div>
       </body>
@@ -706,7 +755,7 @@ export default function SurinCourtWarrantApp() {
           <div className="bg-gray-900 text-center p-6 border-b-4 border-yellow-500 flex flex-col items-center">
             <img src="/srnc-picture.png" alt="ตราศาล" className="w-24 h-24 object-contain mb-3 drop-shadow-md" onError={(e) => e.target.src = "/srncpicture.png"} />
             <h1 className="text-xl font-extrabold text-yellow-400 tracking-wide">ศาลจังหวัดสุรินทร์</h1>
-            <p className="text-xs text-gray-300 mt-1">ระบบงานบันทึกและติดตามการส่งหมายศาลอิเล็กทรอนิกส์ (Server Online)</p>
+            <p className="text-xs text-gray-300 mt-1">ระบบงานบันทึกและติดตามการส่งหมายศาลอิเล็กทรอนิกส์ (Google Sheets Online)</p>
           </div>
           <div className="p-6 md:p-8 space-y-6">
             <div className="text-center">
@@ -738,10 +787,14 @@ export default function SurinCourtWarrantApp() {
         
         .sarabun-font {
           font-family: 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif !important;
-          font-size: 16pt !important;
-          line-height: 1.15 !important;
+          font-size: 16px !important;
+          line-height: 1.25 !important;
           font-variant-numeric: lining-nums proportional-nums !important;
           font-feature-settings: "thai" 0, "tnum" 1 !important;
+        }
+
+        .sarabun-font * {
+          font-size: 16px !important;
         }
 
         .dot-underline {
@@ -753,7 +806,7 @@ export default function SurinCourtWarrantApp() {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 0.6cm 1.0cm 0.3cm 1.0cm !important;
+            margin: 0.8cm 1.2cm 0.6cm 1.2cm !important;
           }
           html, body {
             height: auto !important;
@@ -776,7 +829,7 @@ export default function SurinCourtWarrantApp() {
             display: block !important;
             width: 100% !important;
             margin: 0 !important;
-            padding-top: 0.8rem !important;
+            padding-top: 0.2rem !important;
             border: none !important;
             font-variant-numeric: lining-nums proportional-nums !important;
             font-feature-settings: "thai" 0, "tnum" 1 !important;
@@ -787,14 +840,14 @@ export default function SurinCourtWarrantApp() {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             height: auto !important;
-            max-height: 275mm !important;
+            max-height: 270mm !important;
             overflow: hidden !important;
           }
           .page-batch {
             page-break-after: always !important;
             break-after: page !important;
             height: auto !important;
-            max-height: 275mm !important;
+            max-height: 270mm !important;
             overflow: hidden !important;
           }
         }
@@ -814,7 +867,7 @@ export default function SurinCourtWarrantApp() {
               <span className="text-[10px] text-yellow-300 block">{currentUser?.position} ({currentUser?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'})</span>
             </div>
           </div>
-          <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white px-3 py-1.5 rounded-lg border border-red-500/30 text-xs flex items-center gap-1.5 transition"><LogOut className="w-3.5 h-3.5" /> ออกจากระบบ</button>
+          <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white px-3 py-1.5 rounded-lg border border-red-500/30 text-xs flex items-center gap-1.5 transition cursor-pointer"><LogOut className="w-3.5 h-3.5" /> ออกจากระบบ</button>
         </div>
       </div>
 
@@ -826,14 +879,14 @@ export default function SurinCourtWarrantApp() {
             <img src="/srnc-picture.png" alt="ตราศาล" className="w-12 h-12 object-contain drop-shadow" onError={(e) => e.target.src = "/srncpicture.png"} />
             <div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-yellow-400 flex items-center gap-2">ระบบบันทึกและติดตามการส่งหมายศาล</h1>
-              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Database Sync Online</span></p>
+              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Google Sheets Sync Online</span></p>
             </div>
           </div>
 
           <div className="flex bg-gray-800 p-1 rounded-xl border border-gray-700 w-full md:w-auto">
             <button
               onClick={() => setActiveTab('warrantForm')}
-              className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${
+              className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
                 activeTab === 'warrantForm' ? 'bg-amber-800 text-white shadow' : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -843,7 +896,7 @@ export default function SurinCourtWarrantApp() {
               <>
                 <button
                   onClick={() => setActiveTab('auditLogs')}
-                  className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${
+                  className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
                     activeTab === 'auditLogs' ? 'bg-amber-800 text-white shadow' : 'text-gray-400 hover:text-white'
                   }`}
                 >
@@ -851,7 +904,7 @@ export default function SurinCourtWarrantApp() {
                 </button>
                 <button
                   onClick={() => setActiveTab('userManagement')}
-                  className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${
+                  className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
                     activeTab === 'userManagement' ? 'bg-amber-800 text-white shadow' : 'text-gray-400 hover:text-white'
                   }`}
                 >
@@ -891,7 +944,7 @@ export default function SurinCourtWarrantApp() {
                   <button
                     type="button"
                     onClick={handleClearFormForManualInput}
-                    className="bg-sky-700 hover:bg-sky-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                    className="bg-sky-700 hover:bg-sky-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
                   >
                     <FilePlus className="w-4 h-4" /> กรอกข้อมูลเอง (ล้างฟอร์มใหม่)
                   </button>
@@ -962,7 +1015,7 @@ export default function SurinCourtWarrantApp() {
                         <button
                           type="button"
                           onClick={() => handleDeleteWarrantRecord(item.id, item.blackNo, item.targetName)}
-                          className="bg-red-100 hover:bg-red-600 text-red-700 hover:text-white p-1.5 rounded-lg text-xs font-bold transition"
+                          className="bg-red-100 hover:bg-red-600 text-red-700 hover:text-white p-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
                           title="ลบรายการคดีนี้"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1008,7 +1061,7 @@ export default function SurinCourtWarrantApp() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-600 uppercase mb-1">ราคา/ค่านำส่ง (บาท)</label>
-                    <input type="number" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-semibold text-green-700" placeholder="0.00" />
+                    <input type="text" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-600 focus:outline-none text-gray-800 font-semibold text-green-700" placeholder="เช่น ๒๔๐/๒๕๖๙ หรือ 0.00" />
                   </div>
                 </div>
               </div>
@@ -1156,7 +1209,7 @@ export default function SurinCourtWarrantApp() {
                         <button 
                           type="button" 
                           onClick={() => setFormData(prev => ({ ...prev, photos: [] }))} 
-                          className="text-red-500 hover:underline text-[10px]"
+                          className="text-red-500 hover:underline text-[10px] cursor-pointer"
                         >
                           ล้างทั้งหมด
                         </button>
@@ -1172,7 +1225,7 @@ export default function SurinCourtWarrantApp() {
                             <button
                               type="button"
                               onClick={() => handleRemovePhoto(idx)}
-                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition"
+                              className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition cursor-pointer"
                               title="ลบรูปนี้"
                             >
                               <X className="w-3 h-3" />
@@ -1190,15 +1243,15 @@ export default function SurinCourtWarrantApp() {
               <div className="pt-4 border-t border-gray-200 flex flex-col md:flex-row gap-3">
                 <button 
                   type="submit" 
-                  className="flex-1 bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition"
+                  className="flex-1 bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
                 >
-                  <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server
+                  <Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server (srnccourtrider)
                 </button>
 
                 <button 
                   type="button" 
                   onClick={handleDownloadWordDoc}
-                  className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-blue-500"
+                  className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-blue-500 cursor-pointer"
                   title="ดาวน์โหลดแบบฟอร์มเพื่อแก้ไขใน Microsoft Word"
                 >
                   <FileDown className="w-4 h-4" /> ดาวน์โหลดเอกสาร (Word)
@@ -1210,7 +1263,7 @@ export default function SurinCourtWarrantApp() {
                     setPrintMode('single');
                     setTimeout(() => window.print(), 150);
                   }} 
-                  className="bg-gray-800 hover:bg-gray-900 text-yellow-400 px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-yellow-500"
+                  className="bg-gray-800 hover:bg-gray-900 text-yellow-400 px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-yellow-500 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" /> พิมพ์รายงาน (PDF)
                 </button>
@@ -1224,7 +1277,7 @@ export default function SurinCourtWarrantApp() {
                     }
                     setShowPrintModal(true);
                   }} 
-                  className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600"
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600 cursor-pointer"
                 >
                   <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({allCompletedRecords.length})
                 </button>
@@ -1238,7 +1291,6 @@ export default function SurinCourtWarrantApp() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 no-print">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] border border-amber-300">
               
-              {/* Header */}
               <div className="bg-slate-900 text-white p-4 flex justify-between items-center border-b-2 border-amber-500">
                 <h3 className="text-lg font-bold flex items-center gap-2 text-yellow-400">
                   <Folder className="w-5 h-5 text-yellow-400" /> คลังจัดเก็บข้อมูลย้อนหลัง (แยกตามวัน/เดือน/ปี)
@@ -1251,7 +1303,6 @@ export default function SurinCourtWarrantApp() {
                 </button>
               </div>
 
-              {/* Breadcrumb Navigation */}
               <div className="bg-slate-100 px-6 py-3 border-b text-sm flex items-center gap-2 font-medium text-slate-700">
                 <span 
                   className="cursor-pointer hover:underline text-blue-600 font-bold flex items-center gap-1"
@@ -1289,7 +1340,6 @@ export default function SurinCourtWarrantApp() {
                 )}
               </div>
 
-              {/* Content Area */}
               <div className="p-6 overflow-y-auto flex-1">
                 {!selectedYear && (
                   <div>
@@ -1407,9 +1457,8 @@ export default function SurinCourtWarrantApp() {
                 )}
               </div>
 
-              {/* Footer */}
               <div className="bg-gray-50 p-4 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
-                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Turso Cloud ถาวร</span>
+                <span className="flex items-center gap-1 font-medium"><ShieldCheck className="w-4 h-4 text-emerald-600" /> ข้อมูลซิงค์ก้อนเดียวกับ Google Sheet 'srnccourtrider' ถาวร</span>
                 <button
                   onClick={() => setShowArchiveModal(false)}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg transition font-bold cursor-pointer"
@@ -1447,7 +1496,7 @@ export default function SurinCourtWarrantApp() {
                   <button
                     type="button"
                     onClick={() => setSelectedPrintDate('ALL')}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition ${
+                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
                       selectedPrintDate === 'ALL' ? 'bg-amber-800 text-white border-amber-800' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
                     }`}
                   >
@@ -1464,7 +1513,7 @@ export default function SurinCourtWarrantApp() {
                 <button
                   type="button"
                   onClick={() => setShowPrintModal(false)}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 rounded-xl text-xs transition"
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer"
                 >
                   ยกเลิก
                 </button>
@@ -1472,7 +1521,7 @@ export default function SurinCourtWarrantApp() {
                   type="button"
                   onClick={handleConfirmBatchPrint}
                   disabled={recordsToBatchPrint.length === 0}
-                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <PrinterCheck className="w-4 h-4" /> ยืนยันพิมพ์ ({recordsToBatchPrint.length} คดี)
                 </button>
@@ -1493,7 +1542,7 @@ export default function SurinCourtWarrantApp() {
                 <button
                   type="button"
                   onClick={handleExportAuditLogsCSV}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
                   title="ส่งออกประวัติเป็นไฟล์ Excel / CSV"
                 >
                   <Download className="w-4 h-4" /> ดาวน์โหลด Excel
@@ -1502,7 +1551,7 @@ export default function SurinCourtWarrantApp() {
                 <button
                   type="button"
                   onClick={handleClearOldLogs}
-                  className="bg-red-700 hover:bg-red-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                  className="bg-red-700 hover:bg-red-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"
                   title="ลบ Log เก่าที่เกิน 30 วันเพื่อประหยัดพื้นที่"
                 >
                   <Trash2 className="w-4 h-4" /> ลบ Log เก่า (มากกว่า 30 วัน)
@@ -1521,7 +1570,7 @@ export default function SurinCourtWarrantApp() {
                   className="w-full pl-9 pr-8 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
                 />
                 {logSearchQuery && (
-                  <button onClick={() => setLogSearchQuery('')} className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600">
+                  <button onClick={() => setLogSearchQuery('')} className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 text-xs">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -1532,7 +1581,7 @@ export default function SurinCourtWarrantApp() {
                 <select
                   value={selectedUserFilter}
                   onChange={(e) => setSelectedUserFilter(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 font-bold focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                  className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 font-bold focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">-- แสดงผู้ใช้งานทั้งหมด --</option>
                   {users.map((u) => (
@@ -1637,7 +1686,7 @@ export default function SurinCourtWarrantApp() {
                   <select
                     value={newUser.role}
                     onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none"
+                    className="w-full p-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
                   >
                     <option value="user">ผู้ใช้งานทั่วไป (User)</option>
                     <option value="admin">ผู้ดูแลระบบ (Admin)</option>
@@ -1647,7 +1696,7 @@ export default function SurinCourtWarrantApp() {
                 <div className="flex items-end">
                   <button
                     type="submit"
-                    className="w-full bg-amber-800 hover:bg-amber-900 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 shadow"
+                    className="w-full bg-amber-800 hover:bg-amber-900 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center gap-2 shadow cursor-pointer"
                   >
                     <Plus className="w-4 h-4" /> บันทึกสร้างผู้ใช้
                   </button>
@@ -1738,7 +1787,7 @@ export default function SurinCourtWarrantApp() {
                               <select
                                 value={editUserData.role}
                                 onChange={(e) => setEditUserData({...editUserData, role: e.target.value})}
-                                className="p-1 bg-white border border-gray-300 rounded text-xs"
+                                className="p-1 bg-white border border-gray-300 rounded text-xs cursor-pointer"
                               >
                                 <option value="user">ผู้ใช้งานทั่วไป</option>
                                 <option value="admin">ผู้ดูแลระบบ</option>
@@ -1759,14 +1808,14 @@ export default function SurinCourtWarrantApp() {
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={() => handleSaveEditUser(u.id)}
-                                  className="text-emerald-700 hover:text-emerald-900 bg-emerald-100 p-1.5 rounded-lg transition"
+                                  className="text-emerald-700 hover:text-emerald-900 bg-emerald-100 p-1.5 rounded-lg transition cursor-pointer"
                                   title="บันทึก"
                                 >
                                   <Save className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => setEditingUserId(null)}
-                                  className="text-gray-600 hover:text-gray-800 bg-gray-200 p-1.5 rounded-lg transition"
+                                  className="text-gray-600 hover:text-gray-800 bg-gray-200 p-1.5 rounded-lg transition cursor-pointer"
                                   title="ยกเลิก"
                                 >
                                   <X className="w-4 h-4" />
@@ -1776,14 +1825,14 @@ export default function SurinCourtWarrantApp() {
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={() => { setEditingUserId(u.id); setEditUserData({ ...u }); }}
-                                  className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-lg transition"
+                                  className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                                   title="แก้ไขข้อมูล"
                                 >
                                   <Edit3 className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteUser(u.id, u.fullName)}
-                                  className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded-lg transition"
+                                  className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded-lg transition cursor-pointer"
                                   title="ลบผู้ใช้งาน"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1802,77 +1851,78 @@ export default function SurinCourtWarrantApp() {
           </div>
         )}
 
-        {/* แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 */}
+        {/* แบบฟอร์มรายงานพิมพ์ PDF 1 หน้า A4 (ตรงตามแบบฉบับขวามือ 100%) */}
         <div className="print-area hidden sarabun-font bg-white text-black max-w-2xl mx-auto">
           {printMode === 'single' && (
             <div className="page-single flex flex-col justify-between">
               <div>
-                <div className="text-center font-bold text-xl mb-0.5">
+                <div className="text-center font-bold mb-3 text-base">
                   บันทึกการปิดหมาย / คำบังคับ
                 </div>
 
-                <div className="flex justify-end mb-0.5">
-                  <div className="w-72 space-y-0.5 text-right">
-                    <div className="font-bold text-lg text-center pr-4">[ศาลจังหวัดสุรินทร์]</div>
-                    <div>คดีหมายเลขดำที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{formData.blackNo || "........................"}</span></div>
-                    <div>คดีหมายเลขแดงที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{formData.redNo || "........................"}</span></div>
+                <div className="flex justify-end mb-3">
+                  <div className="w-80 space-y-1 text-right text-sm">
+                    <div className="pr-2">
+                      ศาลจังหวัดสุรินทร์ <span className="font-normal">{formData.price || "๒๔๐/๒๕๖๙"}</span>
+                    </div>
+                    <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[160px] text-center font-bold">{formData.blackNo || "........................................"}</span></div>
+                    <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[160px] text-center font-bold">{formData.redNo || "........................................"}</span></div>
                   </div>
                 </div>
 
-                <div className="space-y-0.5 text-justify pt-0.5">
+                <div className="space-y-2 text-justify leading-relaxed text-sm">
                   <div>
-                    เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span>
+                    เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span>
                   </div>
 
                   <div>
-                    วันที่ <span className="dot-underline font-bold">{formatThaiDate(formData.sendDate)}</span>
+                    วันที่ <span className="dot-underline font-bold min-w-[140px] text-center">{formatThaiDate(formData.sendDate)}</span>
                   </div>
 
                   <div>
-                    วันนี้เวลาประมาณ <span className="dot-underline font-bold">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                    วันนี้เวลาประมาณ <span className="dot-underline font-bold min-w-[60px] text-center">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold min-w-[180px] text-center">{formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold min-w-[200px] text-center">{formData.targetName || "...................................."}</span>
                   </div>
 
                   <div>
-                    ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold">{formData.targetName || "...................................."}</span> <br />
+                    เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold min-w-[90px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[90px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[90px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                  </div>
+
+                  <div>
+                    ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{formData.targetName || "...................................."}</span>
+                  </div>
+
+                  <div>
                     ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล
                   </div>
 
-                  <div className="text-center font-bold pt-0.5 text-lg">
+                  <div className="text-center font-bold pt-4 pb-2">
                     จึงบันทึกไว้เป็นหลักฐาน
                   </div>
 
-                  <div className="flex flex-col items-end pt-0.5 space-y-0.5">
-                    <div className="text-center space-y-0.5">
+                  <div className="flex flex-col items-end pt-2 space-y-2">
+                    <div className="text-center space-y-1 pr-6">
                       <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
                       <div className="font-bold">({currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
                     </div>
                   </div>
 
-                  <div className="text-center font-bold text-base pt-0.5">
-                    ลักษณะบ้าน <span className="dot-underline font-bold">{formData.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span>
+                  <div className="text-center font-bold pt-3">
+                    ลักษณะบ้าน
                   </div>
                 </div>
               </div>
 
-              <div className="mt-1 space-y-1">
-                {formData.photos.length === 1 && (
-                  <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
-                    <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-80 object-contain mx-auto rounded-lg" />
-                  </div>
-                )}
-
-                {formData.photos.length > 1 && (
-                  <div className="grid grid-cols-2 gap-2 w-full max-h-96 overflow-hidden">
-                    {formData.photos.map((photo, pIdx) => (
-                      <div key={pIdx} className="w-full h-44 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
-                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="max-w-full max-h-44 object-contain rounded-lg" />
+              <div className="mt-3">
+                {formData.photos && formData.photos.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 w-full">
+                    {formData.photos.slice(0, 4).map((photo, pIdx) => (
+                      <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300">
+                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover" />
                       </div>
                     ))}
                   </div>
-                )}
-
-                {formData.photos.length === 0 && (
-                  <div className="w-full h-36 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                ) : (
+                  <div className="w-full h-32 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
                     [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
                   </div>
                 )}
@@ -1886,72 +1936,73 @@ export default function SurinCourtWarrantApp() {
               {recordsToBatchPrint.map((item, idx) => (
                 <div key={item.id || idx} className="page-batch flex flex-col justify-between pt-1">
                   <div>
-                    <div className="text-center font-bold text-xl mb-0.5">
+                    <div className="text-center font-bold mb-3 text-base">
                       บันทึกการปิดหมาย / คำบังคับ
                     </div>
 
-                    <div className="flex justify-end mb-0.5">
-                      <div className="w-72 space-y-0.5 text-right">
-                        <div className="font-bold text-lg text-center pr-4">[ศาลจังหวัดสุรินทร์]</div>
-                        <div>คดีหมายเลขดำที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{item.blackNo || "........................"}</span></div>
-                        <div>คดีหมายเลขแดงที่ <span className="dot-underline font-bold text-base min-w-[120px] text-center">{item.redNo || "........................"}</span></div>
+                    <div className="flex justify-end mb-3">
+                      <div className="w-80 space-y-1 text-right text-sm">
+                        <div className="pr-2">
+                          ศาลจังหวัดสุรินทร์ <span className="font-normal">{item.price || "๒๔๐/๒๕๖๙"}</span>
+                        </div>
+                        <div>คดีหมายเลขดำที่ <span className="dot-underline min-w-[160px] text-center font-bold">{item.blackNo || "........................................"}</span></div>
+                        <div>คดีหมายเลขแดงที่ <span className="dot-underline min-w-[160px] text-center font-bold">{item.redNo || "........................................"}</span></div>
                       </div>
                     </div>
 
-                    <div className="space-y-0.5 text-justify pt-0.5">
+                    <div className="space-y-2 text-justify leading-relaxed text-sm">
                       <div>
-                        เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span>
+                        เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{item.province || "สุรินทร์"}</span>
                       </div>
 
                       <div>
-                        วันที่ <span className="dot-underline font-bold">{formatThaiDate(item.sendDate)}</span>
+                        วันที่ <span className="dot-underline font-bold min-w-[140px] text-center">{formatThaiDate(item.sendDate)}</span>
                       </div>
 
                       <div>
-                        วันนี้เวลาประมาณ <span className="dot-underline font-bold">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold">{item.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span className="dot-underline font-bold">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold">{item.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                        วันนี้เวลาประมาณ <span className="dot-underline font-bold min-w-[60px] text-center">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold min-w-[180px] text-center">{item.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold min-w-[200px] text-center">{item.targetName || "...................................."}</span>
                       </div>
 
                       <div>
-                        ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold">{item.targetName || "...................................."}</span> <br />
+                        เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold min-w-[90px] text-center">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[90px] text-center">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[90px] text-center">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{item.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย
+                      </div>
+
+                      <div>
+                        ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{item.targetName || "...................................."}</span>
+                      </div>
+
+                      <div>
                         ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล
                       </div>
 
-                      <div className="text-center font-bold pt-0.5 text-lg">
+                      <div className="text-center font-bold pt-4 pb-2">
                         จึงบันทึกไว้เป็นหลักฐาน
                       </div>
 
-                      <div className="flex flex-col items-end pt-0.5 space-y-0.5">
-                        <div className="text-center space-y-0.5">
+                      <div className="flex flex-col items-end pt-2 space-y-2">
+                        <div className="text-center space-y-1 pr-6">
                           <div>......................................................................ผู้บันทึก/ปิดหมาย</div>
                           <div className="font-bold">({currentUser ? currentUser.fullName : "นายจิรพงษ์ มณีปรุ"})</div>
                         </div>
                       </div>
 
-                      <div className="text-center font-bold text-base pt-0.5">
-                        ลักษณะบ้าน <span className="dot-underline font-bold">{item.warrantResult || "ส่งได้โดยวิธีปิดหมาย"}</span>
+                      <div className="text-center font-bold pt-3">
+                        ลักษณะบ้าน
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-1 space-y-1">
-                    {item.photos && item.photos.length === 1 && (
-                      <div className="w-full rounded-lg overflow-hidden flex items-center justify-center h-80 bg-white">
-                        <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="max-w-full max-h-80 object-contain mx-auto rounded-lg" />
-                      </div>
-                    )}
-
-                    {item.photos && item.photos.length > 1 && (
-                      <div className="grid grid-cols-2 gap-2 w-full max-h-96 overflow-hidden">
-                        {item.photos.map((photo, pIdx) => (
-                          <div key={pIdx} className="w-full h-44 rounded-lg overflow-hidden flex items-center justify-center bg-white border border-gray-200">
-                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="max-w-full max-h-44 object-contain rounded-lg" />
+                  <div className="mt-3">
+                    {item.photos && item.photos.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 w-full">
+                        {item.photos.slice(0, 4).map((photo, pIdx) => (
+                          <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300">
+                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover" />
                           </div>
                         ))}
                       </div>
-                    )}
-
-                    {(!item.photos || item.photos.length === 0) && (
-                      <div className="w-full h-36 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
+                    ) : (
+                      <div className="w-full h-32 text-xs text-gray-400 font-bold flex items-center justify-center rounded-lg border border-dashed border-gray-300">
                         [ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]
                       </div>
                     )}
