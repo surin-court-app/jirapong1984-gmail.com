@@ -244,7 +244,8 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.6) => {
+  // ปรับการย่อรูปภาพให้มีความละเอียดสูงขึ้นมากเพื่อความคมชัด 100%
+  const compressImage = (file, maxWidth = 1600, maxHeight = 1600, quality = 0.85) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -506,7 +507,7 @@ export default function SurinCourtWarrantApp() {
     if (formData.photos.length === 1) {
       photosHtml = `
         <div style="text-align: center; width: 100%;">
-          <img src="${formData.photos[0]}" style="max-width: 85%; max-height: 480px; object-fit: contain; margin: 0 auto; display: block; rounded-lg; border: 1px solid #ccc;"/>
+          <img src="${formData.photos[0]}" style="max-width: 90%; max-height: 520px; object-fit: contain; margin: 0 auto; display: block; border-radius: 6px; border: 1px solid #ddd;"/>
         </div>
       `;
     } else if (formData.photos.length > 1) {
@@ -516,8 +517,8 @@ export default function SurinCourtWarrantApp() {
         const img2 = formData.photos[i + 1];
         rowsHtml += `
           <tr>
-            <td style="width: 50%; padding: 4px; text-align: center;"><img src="${img1}" style="max-width: 100%; max-height: 220px; object-fit: contain;"/></td>
-            <td style="width: 50%; padding: 4px; text-align: center;">${img2 ? `<img src="${img2}" style="max-width: 100%; max-height: 220px; object-fit: contain;"/>` : ''}</td>
+            <td style="width: 50%; padding: 4px; text-align: center;"><img src="${img1}" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 6px;"/></td>
+            <td style="width: 50%; padding: 4px; text-align: center;">${img2 ? `<img src="${img2}" style="max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 6px;"/>` : ''}</td>
           </tr>
         `;
       }
@@ -543,7 +544,7 @@ export default function SurinCourtWarrantApp() {
           .bold { font-weight: bold; }
           .title { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 10px; }
           .underline-dot { border-bottom: 1px dotted #000; padding: 0 5px; font-weight: bold; }
-          img { max-width: 100%; height: auto; border-radius: 8px; }
+          img { max-width: 100%; height: auto; }
         </style>
       </head>
       <body>
@@ -1228,8 +1229,8 @@ export default function SurinCourtWarrantApp() {
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
                         {formData.photos.map((imgUrl, idx) => (
-                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-300 aspect-square shadow-sm">
-                            <img src={imgUrl} alt={`สถานที่ส่ง ${idx + 1}`} className="w-full h-full object-cover" />
+                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-300 aspect-square shadow-sm bg-gray-100 flex items-center justify-center">
+                            <img src={imgUrl} alt={`สถานที่ส่ง ${idx + 1}`} className="w-full h-full object-contain" />
                             <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
                               รูปที่ {idx + 1}
                             </span>
@@ -1926,19 +1927,19 @@ export default function SurinCourtWarrantApp() {
                 </div>
               </div>
 
-              {/* การจัดแสดงรูปถ่าย: รูปเดียวจัดให้อยู่ตรงกลางหน้ากระดาษและขยายขนาดใหญ่ขึ้น */}
+              {/* การจัดแสดงรูปถ่าย: ปรับเป็น object-contain ให้ภาพคมชัดสูงและแสดงเต็มรูปไม่ตัดขอบ GPS */}
               <div className="mt-3 w-full flex justify-center">
                 {formData.photos && formData.photos.length === 1 ? (
                   <div className="w-full text-center flex justify-center items-center">
-                    <div className="w-4/5 h-72 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg mx-auto">
-                      <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-cover" />
+                    <div className="w-full max-w-[85%] h-80 overflow-hidden flex items-center justify-center bg-gray-50 border border-gray-300 rounded-lg mx-auto">
+                      <img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-contain" />
                     </div>
                   </div>
                 ) : formData.photos && formData.photos.length > 1 ? (
                   <div className="grid grid-cols-2 gap-2 w-full">
                     {formData.photos.slice(0, 4).map((photo, pIdx) => (
-                      <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300">
-                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover" />
+                      <div key={pIdx} className="w-full h-52 overflow-hidden flex items-center justify-center bg-gray-50 border border-gray-300 rounded-lg">
+                        <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-contain" />
                       </div>
                     ))}
                   </div>
@@ -2016,15 +2017,15 @@ export default function SurinCourtWarrantApp() {
                   <div className="mt-3 w-full flex justify-center">
                     {item.photos && item.photos.length === 1 ? (
                       <div className="w-full text-center flex justify-center items-center">
-                        <div className="w-4/5 h-72 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300 rounded-lg mx-auto">
-                          <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-cover" />
+                        <div className="w-full max-w-[85%] h-80 overflow-hidden flex items-center justify-center bg-gray-50 border border-gray-300 rounded-lg mx-auto">
+                          <img src={item.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-full h-full object-contain" />
                         </div>
                       </div>
                     ) : item.photos && item.photos.length > 1 ? (
                       <div className="grid grid-cols-2 gap-2 w-full">
                         {item.photos.slice(0, 4).map((photo, pIdx) => (
-                          <div key={pIdx} className="w-full h-48 overflow-hidden flex items-center justify-center bg-gray-100 border border-gray-300">
-                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-cover" />
+                          <div key={pIdx} className="w-full h-52 overflow-hidden flex items-center justify-center bg-gray-50 border border-gray-300 rounded-lg">
+                            <img src={photo} alt={`รูปสถานที่ส่งหมาย ${pIdx + 1}`} className="w-full h-full object-contain" />
                           </div>
                         ))}
                       </div>
