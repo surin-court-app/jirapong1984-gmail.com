@@ -761,9 +761,10 @@ export default function SurinCourtWarrantApp() {
     return matchesUser && matchesQuery;
   });
 
+  // พิมพ์เฉพาะรายการที่เสร็จในรอบปัจจุบัน
   const recordsToBatchPrint = selectedPrintDate === 'ALL'
-    ? allCompletedRecords
-    : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
+    ? currentCompletedRecords
+    : currentCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
 
   if (!isLoggedIn) {
     return (
@@ -1297,15 +1298,15 @@ export default function SurinCourtWarrantApp() {
                 <button 
                   type="button" 
                   onClick={() => {
-                    if (allCompletedRecords.length === 0) {
-                      alert("ยังไม่มีรายการคดีที่บันทึกรายงานผลเข้าระบบ");
+                    if (currentCompletedRecords.length === 0) {
+                      alert("ยังไม่มีรายการคดีที่บันทึกรายงานผลในรอบปัจจุบัน");
                       return;
                     }
                     setShowPrintModal(true);
                   }} 
                   className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600 cursor-pointer"
                 >
-                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({allCompletedRecords.length})
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({currentCompletedRecords.length})
                 </button>
               </div>
             </form>
@@ -1531,7 +1532,7 @@ export default function SurinCourtWarrantApp() {
                 </div>
 
                 <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                  จะพิมพ์เฉพาะรายการที่บันทึกแล้ว จำนวน: <span className="font-bold text-emerald-700 text-sm">{recordsToBatchPrint.length}</span> รายการ
+                  จะพิมพ์เฉพาะรายการในรอบปัจจุบัน จำนวน: <span className="font-bold text-emerald-700 text-sm">{recordsToBatchPrint.length}</span> รายการ
                 </div>
               </div>
 
