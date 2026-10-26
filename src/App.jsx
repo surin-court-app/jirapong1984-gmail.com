@@ -728,10 +728,16 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  const pendingRecords = currentRecords.filter(r => !r.isSaved);
+  // กรองเฉพาะรายการในรอบการทำงานปัจจุบัน (ถ้ามี batchId ใช้อันนั้น หรือถ้าไม่มี ใช้เฉพาะรายการของวันนี้)
+  const activeSessionRecords = currentBatchId
+    ? currentRecords.filter(r => r.batchId === currentBatchId)
+    : currentRecords.filter(r => (r.sendDate || todayStr) === todayStr);
+
+  const pendingRecords = activeSessionRecords.filter(r => !r.isSaved);
+  const currentCompletedRecords = activeSessionRecords.filter(r => r.isSaved);
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
-  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : allCompletedRecords;
+  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : currentCompletedRecords;
   
   if (searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase().trim();
@@ -1009,7 +1015,7 @@ export default function SurinCourtWarrantApp() {
                       excelFilterStatus === 'completed' && !searchQuery ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-amber-300/60'
                     }`}
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({allCompletedRecords.length})
+                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({currentCompletedRecords.length})
                   </button>
                 </div>
               </div>
@@ -1051,7 +1057,9 @@ export default function SurinCourtWarrantApp() {
                 </div>
               ) : (
                 <div className="text-center py-6 bg-white rounded-lg border border-dashed border-amber-300 text-xs text-gray-500">
-                  ยังไม่มีรายการคดีในบัญชีของ <span className="font-bold text-amber-900">{currentUser?.fullName}</span>
+                  {excelFilterStatus === 'completed'
+                    ? "ยังไม่มีรายการคดีที่บันทึกรายงานในรอบปัจจุบัน"
+                    : `ยังไม่มีรายการคดีรอดำเนินการในบัญชีของ ${currentUser?.fullName || ''}`}
                 </div>
               )}
             </div>
