@@ -15,3 +15,5 @@ git push origin main
 ทันทีที่กด git push เสร็จ Render จะตรวจพบโค้ดใหม่และเริ่ม Auto-Deploy ให้อัตโนมัติทันที
 
 ใช้เวลาประมาณ 1–2 นาที หน้าเว็บ https://surin-court-app.onrender.com ก็จะอัปเดตเป็นเวอร์ชันล่าสุดให้ทันทีครับ
+
+https://dashboard.render.com/
