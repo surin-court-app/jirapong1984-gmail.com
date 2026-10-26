@@ -728,7 +728,7 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  // กรองเฉพาะรายการในรอบการทำงานปัจจุบัน (ถ้ามี batchId ใช้อันนั้น หรือถ้าไม่มี ใช้เฉพาะรายการของวันนี้)
+  // กรองเฉพาะรายการในรอบการทำงานปัจจุบัน
   const activeSessionRecords = currentBatchId
     ? currentRecords.filter(r => r.batchId === currentBatchId)
     : currentRecords.filter(r => (r.sendDate || todayStr) === todayStr);
@@ -736,6 +736,9 @@ export default function SurinCourtWarrantApp() {
   const pendingRecords = activeSessionRecords.filter(r => !r.isSaved);
   const currentCompletedRecords = activeSessionRecords.filter(r => r.isSaved);
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
+
+  // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว เพื่อทำ Dropdown ให้เลือกพิมพ์ง่ายๆ
+  const availablePrintDates = Array.from(new Set(allCompletedRecords.map(r => r.sendDate).filter(Boolean))).sort().reverse();
 
   let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : currentCompletedRecords;
   
@@ -761,10 +764,10 @@ export default function SurinCourtWarrantApp() {
     return matchesUser && matchesQuery;
   });
 
-  // พิมพ์เฉพาะรายการที่เสร็จในรอบปัจจุบัน
+  // กรองรายการที่จะสั่งพิมพ์ตามวันที่ผู้ใช้คลิกเลือกใน Modal
   const recordsToBatchPrint = selectedPrintDate === 'ALL'
-    ? currentCompletedRecords
-    : currentCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
+    ? allCompletedRecords
+    : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
 
   if (!isLoggedIn) {
     return (
@@ -1298,15 +1301,15 @@ export default function SurinCourtWarrantApp() {
                 <button 
                   type="button" 
                   onClick={() => {
-                    if (currentCompletedRecords.length === 0) {
-                      alert("ยังไม่มีรายการคดีที่บันทึกรายงานผลในรอบปัจจุบัน");
+                    if (allCompletedRecords.length === 0) {
+                      alert("ยังไม่มีรายการคดีที่เคยบันทึกรายงานผลในระบบเลย");
                       return;
                     }
                     setShowPrintModal(true);
                   }} 
                   className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600 cursor-pointer"
                 >
-                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({currentCompletedRecords.length})
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด {currentCompletedRecords.length > 0 ? `(${currentCompletedRecords.length})` : ''}
                 </button>
               </div>
             </form>
@@ -1504,35 +1507,66 @@ export default function SurinCourtWarrantApp() {
             <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-amber-300 space-y-4">
               <div className="flex justify-between items-center border-b border-gray-200 pb-3">
                 <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-emerald-700" /> เลือกวันที่ต้องการพิมพ์รายงานทั้งหมด
+                  <Calendar className="w-5 h-5 text-emerald-700" /> เลือกวันที่ต้องการพิมพ์รายงาน
                 </h3>
-                <button onClick={() => setShowPrintModal(false)} className="text-gray-400 hover:text-gray-600">
+                <button onClick={() => setShowPrintModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <label className="block text-xs font-bold text-gray-700 uppercase">กรองตามวันที่ส่งหมาย:</label>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={selectedPrintDate === 'ALL' ? '' : selectedPrintDate}
-                    onChange={(e) => setSelectedPrintDate(e.target.value)}
-                    className="flex-1 p-2 bg-amber-50/50 border border-amber-300 rounded-lg text-sm text-gray-800 font-medium"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPrintDate('ALL')}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                      selectedPrintDate === 'ALL' ? 'bg-amber-800 text-white border-amber-800' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                    }`}
-                  >
-                    พิมพ์ทุกวัน
-                  </button>
+              <div className="space-y-4 text-xs">
+                {/* วิธีที่ 1: เลือกจากเมนูวันที่มีการบันทึกไว้แล้ว */}
+                {availablePrintDates.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-gray-700 uppercase">
+                      📌 คลิกเลือกวันที่ที่เคยบันทึกไว้:
+                    </label>
+                    <select
+                      value={selectedPrintDate}
+                      onChange={(e) => setSelectedPrintDate(e.target.value)}
+                      className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
+                    >
+                      <option value={todayStr}>-- วันนี้ ({formatThaiDate(todayStr)}) --</option>
+                      {availablePrintDates.map((dateStr) => {
+                        const count = allCompletedRecords.filter(r => r.sendDate === dateStr).length;
+                        return (
+                          <option key={dateStr} value={dateStr}>
+                            วันที่ {formatThaiDate(dateStr)} ({count} คดี)
+                          </option>
+                        );
+                      })}
+                      <option value="ALL">-- พิมพ์รายงานทั้งหมดทุกวัน ({allCompletedRecords.length} คดี) --</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* วิธีที่ 2: ระบุวันที่ในปฏิทินเอง */}
+                <div className="space-y-1.5">
+                  <label className="block font-bold text-gray-700 uppercase">
+                    📅 หรือระบุวันที่ส่งหมายในปฏิทิน:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={selectedPrintDate === 'ALL' ? '' : selectedPrintDate}
+                      onChange={(e) => setSelectedPrintDate(e.target.value)}
+                      className="flex-1 p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPrintDate('ALL')}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                        selectedPrintDate === 'ALL' ? 'bg-amber-800 text-white border-amber-800' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                      }`}
+                    >
+                      พิมพ์ทั้งหมด
+                    </button>
+                  </div>
                 </div>
 
-                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                  จะพิมพ์เฉพาะรายการในรอบปัจจุบัน จำนวน: <span className="font-bold text-emerald-700 text-sm">{recordsToBatchPrint.length}</span> รายการ
+                <div className="text-xs text-gray-600 bg-amber-50/60 p-3 rounded-lg border border-amber-200 flex justify-between items-center">
+                  <span>จำนวนคดีที่จะพิมพ์:</span>
+                  <span className="font-bold text-emerald-800 text-sm">{recordsToBatchPrint.length} รายการ</span>
                 </div>
               </div>
 
@@ -1550,7 +1584,7 @@ export default function SurinCourtWarrantApp() {
                   disabled={recordsToBatchPrint.length === 0}
                   className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <PrinterCheck className="w-4 h-4" /> ยืนยันพิมพ์ ({recordsToBatchPrint.length} คดี)
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์เอกสาร ({recordsToBatchPrint.length} คดี)
                 </button>
               </div>
             </div>
