@@ -90,7 +90,23 @@ export default function SurinCourtWarrantApp() {
     return user ? loadLocalBackup(user) : [];
   });
 
-  const [currentBatchId, setCurrentBatchId] = useState(null);
+  // โหลดและบันทึก batchId ล่าสุดลงใน localStorage เพื่อไม่ให้รีเซ็ตเมื่อข้ามวัน
+  const [currentBatchId, setCurrentBatchId] = useState(() => {
+    try {
+      return localStorage.getItem('srnc_current_batch_id') || null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const updateCurrentBatchId = (batchId) => {
+    setCurrentBatchId(batchId);
+    if (batchId) {
+      localStorage.setItem('srnc_current_batch_id', batchId);
+    } else {
+      localStorage.removeItem('srnc_current_batch_id');
+    }
+  };
 
   const [editingUserId, setEditingUserId] = useState(null);
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
@@ -220,7 +236,7 @@ export default function SurinCourtWarrantApp() {
 
   const handleClearFormForManualInput = () => {
     const newManualBatchId = `manual_${Date.now()}`;
-    setCurrentBatchId(newManualBatchId);
+    updateCurrentBatchId(newManualBatchId);
     setFormData({
       ...initialFormState,
       selectedRecordId: `manual_${currentUser?.username || 'user'}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -403,7 +419,7 @@ export default function SurinCourtWarrantApp() {
             return;
           }
 
-          setCurrentBatchId(newBatchId);
+          updateCurrentBatchId(newBatchId);
           setExcelFilterStatus('pending');
 
           const updatedList = [...currentRecords.filter(r => r.ownerUsername !== activeUsername), ...parsedRecords];
@@ -728,16 +744,19 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  // กรองเฉพาะรายการในรอบการทำงานปัจจุบัน
-  const activeSessionRecords = currentBatchId
-    ? currentRecords.filter(r => r.batchId === currentBatchId)
-    : currentRecords.filter(r => (r.sendDate || todayStr) === todayStr);
+  // 1. คดีรอดำเนินการ: แสดงคดีทั้งหมดที่ยังไม่ได้บันทึกผล (แม้ข้ามวันก็ไม่หายไปเป็น 0)
+  const pendingRecords = currentRecords.filter(r => !r.isSaved);
 
-  const pendingRecords = activeSessionRecords.filter(r => !r.isSaved);
-  const currentCompletedRecords = activeSessionRecords.filter(r => r.isSaved);
+  // 2. คดีรายงานแล้วในรอบปัจจุบัน:
+  // หากมี batchId จากการนำเข้า Excel ชุดล่าสุด ให้นับเฉพาะของชุดนั้น
+  // แต่ถ้าไม่มี batchId ให้แสดงเฉพาะที่รายงานในวันนี้
+  const currentCompletedRecords = currentBatchId
+    ? currentRecords.filter(r => r.isSaved && r.batchId === currentBatchId)
+    : currentRecords.filter(r => r.isSaved && (r.sendDate || todayStr) === todayStr);
+
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
-  // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว เพื่อทำ Dropdown ให้เลือกพิมพ์ง่ายๆ
+  // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว
   const availablePrintDates = Array.from(new Set(allCompletedRecords.map(r => r.sendDate).filter(Boolean))).sort().reverse();
 
   let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : currentCompletedRecords;
@@ -764,7 +783,6 @@ export default function SurinCourtWarrantApp() {
     return matchesUser && matchesQuery;
   });
 
-  // กรองรายการที่จะสั่งพิมพ์ตามวันที่ผู้ใช้คลิกเลือกใน Modal
   const recordsToBatchPrint = selectedPrintDate === 'ALL'
     ? allCompletedRecords
     : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
@@ -1515,7 +1533,6 @@ export default function SurinCourtWarrantApp() {
               </div>
 
               <div className="space-y-4 text-xs">
-                {/* วิธีที่ 1: เลือกจากเมนูวันที่มีการบันทึกไว้แล้ว */}
                 {availablePrintDates.length > 0 && (
                   <div className="space-y-1.5">
                     <label className="block font-bold text-gray-700 uppercase">
@@ -1540,7 +1557,6 @@ export default function SurinCourtWarrantApp() {
                   </div>
                 )}
 
-                {/* วิธีที่ 2: ระบุวันที่ในปฏิทินเอง */}
                 <div className="space-y-1.5">
                   <label className="block font-bold text-gray-700 uppercase">
                     📅 หรือระบุวันที่ส่งหมายในปฏิทิน:
