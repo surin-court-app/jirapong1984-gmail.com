@@ -27,26 +27,38 @@ export default function SurinCourtWarrantApp() {
     return `${hours}:${minutes}`;
   };
 
-  // ฟังก์ชันตรวจสอบว่าวันที่อยู่ในช่วงสัปดาห์ปัจจุบัน (วันจันทร์ - วันอาทิตย์) หรือไม่
+  // ฟังก์ชันคำนวณสัปดาห์ปัจจุบัน รองรับทั้งปี ค.ศ. และ พ.ศ. (จันทร์ - อาทิตย์)
   const isDateInCurrentWeek = (dateString) => {
     if (!dateString) return false;
-    const target = new Date(dateString);
-    if (isNaN(target.getTime())) return false;
+    try {
+      const parts = String(dateString).trim().split('-');
+      if (parts.length !== 3) return false;
 
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 คือวันอาทิตย์, 1 คือวันจันทร์
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      let year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
 
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + diffToMonday);
-    monday.setHours(0, 0, 0, 0);
+      if (year > 2400) year -= 543; // แปลง พ.ศ. เป็น ค.ศ.
 
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
+      const target = new Date(year, month, day, 12, 0, 0);
+      const now = new Date();
+      now.setHours(12, 0, 0, 0);
 
-    target.setHours(12, 0, 0, 0);
-    return target >= monday && target <= sunday;
+      const dayOfWeek = now.getDay(); // 0 = อาทิตย์, 1 = จันทร์
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      return target >= monday && target <= sunday;
+    } catch (e) {
+      return false;
+    }
   };
 
   const warrantResultOptions = [
@@ -266,7 +278,7 @@ export default function SurinCourtWarrantApp() {
   const formatThaiDate = (dateString) => {
     if (!dateString) return "....................";
     const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-    const parts = dateString.split('-');
+    const parts = String(dateString).split('-');
     if (parts.length === 3) {
       const day = parseInt(parts[2], 10);
       const month = thaiMonths[parseInt(parts[1], 10) - 1];
@@ -739,7 +751,7 @@ export default function SurinCourtWarrantApp() {
 
     currentRecords.forEach(rec => {
       const dateStr = rec.sendDate || todayStr;
-      const parts = dateStr.split('-');
+      const parts = String(dateStr).split('-');
       if (parts.length === 3) {
         let rawYear = parseInt(parts[0], 10);
         if (isNaN(rawYear)) return;
@@ -761,19 +773,19 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  // 1. คดีที่ยังรอดำเนินการ: แสดงคดีทั้งหมดที่ยังไม่เสร็จของ User นี้ (ข้ามวันก็ไม่หาย)
+  // 1. คดีที่ยังรอดำเนินการ: แสดงคดีทั้งหมดที่ยังไม่เสร็จของ User นี้
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
 
-  // 2. คดีที่รายงานแล้วใน "สัปดาห์นี้": แสดงเฉพาะรายการที่มีวันที่ส่งหมายอยู่ในสัปดาห์ปัจจุบัน (สัปดาห์ต่อสัปดาห์)
+  // 2. คดีที่รายงานแล้วใน "สัปดาห์นี้": แสดงเฉพาะสัปดาห์ปัจจุบัน (สัปดาห์ต่อสัปดาห์)
   const weeklyCompletedRecords = currentRecords.filter(r => r.isSaved && isDateInCurrentWeek(r.sendDate));
 
-  // คดีที่รายงานแล้วทั้งหมดในประวัติ (ใช้สำหรับคลังเอกสารและตัวเลือกพิมพ์รวม)
+  // คดีที่รายงานแล้วทั้งหมดในประวัติ
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
   // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว
   const availablePrintDates = Array.from(new Set(allCompletedRecords.map(r => r.sendDate).filter(Boolean))).sort().reverse();
 
-  // แสดงผลตามแท็บที่เลือก: รอดำเนินการ หรือ รายงานแล้วของสัปดาห์นี้
+  // แสดงผลตามแท็บ: รอดำเนินการ หรือ รายงานแล้วของสัปดาห์นี้
   let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : weeklyCompletedRecords;
   
   if (searchQuery.trim() !== '') {
