@@ -27,6 +27,28 @@ export default function SurinCourtWarrantApp() {
     return `${hours}:${minutes}`;
   };
 
+  // ฟังก์ชันตรวจสอบว่าวันที่อยู่ในช่วงสัปดาห์ปัจจุบัน (วันจันทร์ - วันอาทิตย์) หรือไม่
+  const isDateInCurrentWeek = (dateString) => {
+    if (!dateString) return false;
+    const target = new Date(dateString);
+    if (isNaN(target.getTime())) return false;
+
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 คือวันอาทิตย์, 1 คือวันจันทร์
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    target.setHours(12, 0, 0, 0);
+    return target >= monday && target <= sunday;
+  };
+
   const warrantResultOptions = [
     "ส่งได้โดยวิธีปิดหมาย",
     "ส่งได้รับได้ด้วยตัวเอง",
@@ -417,7 +439,6 @@ export default function SurinCourtWarrantApp() {
           setCurrentBatchId(newBatchId);
           setExcelFilterStatus('pending');
 
-          // เก็บข้อมูลเก่าทั้งหมดไว้ แล้วต่อด้วยชุดใหม่
           const updatedList = [...currentRecords, ...parsedRecords];
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
@@ -740,16 +761,20 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  // 1. คดีที่ยังรอดำเนินการ: แสดงรายการที่ยังไม่ได้บันทึกรายงานผล ทั้งหมดของ User คนนี้ (ข้ามวันก็ไม่หาย)
+  // 1. คดีที่ยังรอดำเนินการ: แสดงคดีทั้งหมดที่ยังไม่เสร็จของ User นี้ (ข้ามวันก็ไม่หาย)
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
 
-  // 2. คดีที่รายงานแล้ว: แสดงรายการที่รายงานแล้วทั้งหมดของ User คนนี้ เพื่อให้เห็นยอดจริงว่าทำไปกี่เรื่อง
+  // 2. คดีที่รายงานแล้วใน "สัปดาห์นี้": แสดงเฉพาะรายการที่มีวันที่ส่งหมายอยู่ในสัปดาห์ปัจจุบัน (สัปดาห์ต่อสัปดาห์)
+  const weeklyCompletedRecords = currentRecords.filter(r => r.isSaved && isDateInCurrentWeek(r.sendDate));
+
+  // คดีที่รายงานแล้วทั้งหมดในประวัติ (ใช้สำหรับคลังเอกสารและตัวเลือกพิมพ์รวม)
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
   // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว
   const availablePrintDates = Array.from(new Set(allCompletedRecords.map(r => r.sendDate).filter(Boolean))).sort().reverse();
 
-  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : allCompletedRecords;
+  // แสดงผลตามแท็บที่เลือก: รอดำเนินการ หรือ รายงานแล้วของสัปดาห์นี้
+  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : weeklyCompletedRecords;
   
   if (searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase().trim();
@@ -774,7 +799,7 @@ export default function SurinCourtWarrantApp() {
   });
 
   const recordsToBatchPrint = selectedPrintDate === 'ALL'
-    ? allCompletedRecords
+    ? weeklyCompletedRecords
     : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
 
   if (!isLoggedIn) {
@@ -1027,7 +1052,7 @@ export default function SurinCourtWarrantApp() {
                       excelFilterStatus === 'completed' && !searchQuery ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-amber-300/60'
                     }`}
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({allCompletedRecords.length})
+                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้วสัปดาห์นี้ ({weeklyCompletedRecords.length})
                   </button>
                 </div>
               </div>
@@ -1044,7 +1069,7 @@ export default function SurinCourtWarrantApp() {
                           {item.isSaved && <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold">รายงานแล้ว</span>}
                         </div>
                         <div className="text-gray-600">ถึง: <span className="font-bold text-gray-900">{item.targetName}</span></div>
-                        <div className="text-gray-500">{item.warrantType} | อ.{item.district || '-'}</div>
+                        <div className="text-gray-500">{item.warrantType} | อ.{item.district || '-'} | {formatThaiDate(item.sendDate)}</div>
                       </div>
                       
                       <div className="flex items-center gap-1">
@@ -1070,7 +1095,7 @@ export default function SurinCourtWarrantApp() {
               ) : (
                 <div className="text-center py-6 bg-white rounded-lg border border-dashed border-amber-300 text-xs text-gray-500">
                   {excelFilterStatus === 'completed'
-                    ? "ยังไม่มีรายการคดีที่บันทึกรายงานผลในระบบ"
+                    ? "ยังไม่มีรายการคดีที่บันทึกรายงานผลในสัปดาห์นี้ (สามารถดูประวัติเก่าในคลังโฟลเดอร์ย้อนหลัง)"
                     : `ยังไม่มีรายการคดีรอดำเนินการในบัญชีของ ${currentUser?.fullName || ''}`}
                 </div>
               )}
@@ -1317,7 +1342,7 @@ export default function SurinCourtWarrantApp() {
                   }} 
                   className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600 cursor-pointer"
                 >
-                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด {allCompletedRecords.length > 0 ? `(${allCompletedRecords.length})` : ''}
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด {weeklyCompletedRecords.length > 0 ? `(${weeklyCompletedRecords.length})` : ''}
                 </button>
               </div>
             </form>
@@ -1533,7 +1558,7 @@ export default function SurinCourtWarrantApp() {
                       onChange={(e) => setSelectedPrintDate(e.target.value)}
                       className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
                     >
-                      <option value="ALL">-- พิมพ์รายงานทั้งหมดทุกวัน ({allCompletedRecords.length} คดี) --</option>
+                      <option value="ALL">-- พิมพ์รายงานสัปดาห์นี้ทั้งหมด ({weeklyCompletedRecords.length} คดี) --</option>
                       {availablePrintDates.map((dateStr) => {
                         const count = allCompletedRecords.filter(r => r.sendDate === dateStr).length;
                         return (
@@ -1564,7 +1589,7 @@ export default function SurinCourtWarrantApp() {
                         selectedPrintDate === 'ALL' ? 'bg-amber-800 text-white border-amber-800' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
                       }`}
                     >
-                      พิมพ์ทั้งหมด
+                      สัปดาห์นี้
                     </button>
                   </div>
                 </div>
