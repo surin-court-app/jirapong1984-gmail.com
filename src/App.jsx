@@ -63,7 +63,7 @@ export default function SurinCourtWarrantApp() {
 
   const [printMode, setPrintMode] = useState('single');
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [selectedPrintDate, setSelectedPrintDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedPrintDate, setSelectedPrintDate] = useState('ALL');
 
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,23 +90,7 @@ export default function SurinCourtWarrantApp() {
     return user ? loadLocalBackup(user) : [];
   });
 
-  // โหลดและบันทึก batchId ล่าสุดลงใน localStorage เพื่อไม่ให้รีเซ็ตเมื่อข้ามวัน
-  const [currentBatchId, setCurrentBatchId] = useState(() => {
-    try {
-      return localStorage.getItem('srnc_current_batch_id') || null;
-    } catch (e) {
-      return null;
-    }
-  });
-
-  const updateCurrentBatchId = (batchId) => {
-    setCurrentBatchId(batchId);
-    if (batchId) {
-      localStorage.setItem('srnc_current_batch_id', batchId);
-    } else {
-      localStorage.removeItem('srnc_current_batch_id');
-    }
-  };
+  const [currentBatchId, setCurrentBatchId] = useState(null);
 
   const [editingUserId, setEditingUserId] = useState(null);
   const [editUserData, setEditUserData] = useState({ username: '', password: '', fullName: '', position: '', role: 'user' });
@@ -152,27 +136,38 @@ export default function SurinCourtWarrantApp() {
     if (backup.length > 0) setCurrentRecords(backup);
 
     try {
-      const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
       let backendWarrants = [];
-      if (resBackend.ok) {
-        backendWarrants = await resBackend.json();
+      try {
+        const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
+        if (resBackend.ok) {
+          backendWarrants = await resBackend.json();
+        }
+      } catch (err) {
+        console.warn("Backend fetch error:", err);
       }
 
-      const resGS = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
       let gsWarrants = [];
-      if (resGS.ok) {
-        const data = await resGS.json();
-        if (Array.isArray(data)) {
-          gsWarrants = data.map(w => ({
-            ...w,
-            isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
-          }));
+      try {
+        const resGS = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
+        if (resGS.ok) {
+          const data = await resGS.json();
+          if (Array.isArray(data)) {
+            gsWarrants = data.map(w => ({
+              ...w,
+              isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1" || w.isSaved === "true"
+            }));
+          }
         }
+      } catch (err) {
+        console.warn("Google Script fetch error:", err);
       }
 
       const mergedMap = new Map();
       backup.forEach(item => mergedMap.set(item.id, item));
-      backendWarrants.forEach(item => mergedMap.set(item.id, { ...item, isSaved: Boolean(item.isSaved) }));
+      backendWarrants.forEach(item => mergedMap.set(item.id, { 
+        ...item, 
+        isSaved: Boolean(item.isSaved === true || item.isSaved === 1 || item.isSaved === "1" || item.isSaved === "true") 
+      }));
       gsWarrants.forEach(item => mergedMap.set(item.id, item));
 
       const mergedList = Array.from(mergedMap.values());
@@ -236,7 +231,7 @@ export default function SurinCourtWarrantApp() {
 
   const handleClearFormForManualInput = () => {
     const newManualBatchId = `manual_${Date.now()}`;
-    updateCurrentBatchId(newManualBatchId);
+    setCurrentBatchId(newManualBatchId);
     setFormData({
       ...initialFormState,
       selectedRecordId: `manual_${currentUser?.username || 'user'}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -419,10 +414,11 @@ export default function SurinCourtWarrantApp() {
             return;
           }
 
-          updateCurrentBatchId(newBatchId);
+          setCurrentBatchId(newBatchId);
           setExcelFilterStatus('pending');
 
-          const updatedList = [...currentRecords.filter(r => r.ownerUsername !== activeUsername), ...parsedRecords];
+          // เก็บข้อมูลเก่าทั้งหมดไว้ แล้วต่อด้วยชุดใหม่
+          const updatedList = [...currentRecords, ...parsedRecords];
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
@@ -744,22 +740,16 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  // 1. คดีรอดำเนินการ: แสดงคดีทั้งหมดที่ยังไม่ได้บันทึกผล (แม้ข้ามวันก็ไม่หายไปเป็น 0)
+  // 1. คดีที่ยังรอดำเนินการ: แสดงรายการที่ยังไม่ได้บันทึกรายงานผล ทั้งหมดของ User คนนี้ (ข้ามวันก็ไม่หาย)
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
 
-  // 2. คดีรายงานแล้วในรอบปัจจุบัน:
-  // หากมี batchId จากการนำเข้า Excel ชุดล่าสุด ให้นับเฉพาะของชุดนั้น
-  // แต่ถ้าไม่มี batchId ให้แสดงเฉพาะที่รายงานในวันนี้
-  const currentCompletedRecords = currentBatchId
-    ? currentRecords.filter(r => r.isSaved && r.batchId === currentBatchId)
-    : currentRecords.filter(r => r.isSaved && (r.sendDate || todayStr) === todayStr);
-
+  // 2. คดีที่รายงานแล้ว: แสดงรายการที่รายงานแล้วทั้งหมดของ User คนนี้ เพื่อให้เห็นยอดจริงว่าทำไปกี่เรื่อง
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
   // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว
   const availablePrintDates = Array.from(new Set(allCompletedRecords.map(r => r.sendDate).filter(Boolean))).sort().reverse();
 
-  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : currentCompletedRecords;
+  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : allCompletedRecords;
   
   if (searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase().trim();
@@ -1037,7 +1027,7 @@ export default function SurinCourtWarrantApp() {
                       excelFilterStatus === 'completed' && !searchQuery ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-amber-300/60'
                     }`}
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({currentCompletedRecords.length})
+                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({allCompletedRecords.length})
                   </button>
                 </div>
               </div>
@@ -1080,7 +1070,7 @@ export default function SurinCourtWarrantApp() {
               ) : (
                 <div className="text-center py-6 bg-white rounded-lg border border-dashed border-amber-300 text-xs text-gray-500">
                   {excelFilterStatus === 'completed'
-                    ? "ยังไม่มีรายการคดีที่บันทึกรายงานในรอบปัจจุบัน"
+                    ? "ยังไม่มีรายการคดีที่บันทึกรายงานผลในระบบ"
                     : `ยังไม่มีรายการคดีรอดำเนินการในบัญชีของ ${currentUser?.fullName || ''}`}
                 </div>
               )}
@@ -1327,7 +1317,7 @@ export default function SurinCourtWarrantApp() {
                   }} 
                   className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600 cursor-pointer"
                 >
-                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด {currentCompletedRecords.length > 0 ? `(${currentCompletedRecords.length})` : ''}
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด {allCompletedRecords.length > 0 ? `(${allCompletedRecords.length})` : ''}
                 </button>
               </div>
             </form>
@@ -1543,7 +1533,7 @@ export default function SurinCourtWarrantApp() {
                       onChange={(e) => setSelectedPrintDate(e.target.value)}
                       className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
                     >
-                      <option value={todayStr}>-- วันนี้ ({formatThaiDate(todayStr)}) --</option>
+                      <option value="ALL">-- พิมพ์รายงานทั้งหมดทุกวัน ({allCompletedRecords.length} คดี) --</option>
                       {availablePrintDates.map((dateStr) => {
                         const count = allCompletedRecords.filter(r => r.sendDate === dateStr).length;
                         return (
@@ -1552,7 +1542,6 @@ export default function SurinCourtWarrantApp() {
                           </option>
                         );
                       })}
-                      <option value="ALL">-- พิมพ์รายงานทั้งหมดทุกวัน ({allCompletedRecords.length} คดี) --</option>
                     </select>
                   </div>
                 )}
