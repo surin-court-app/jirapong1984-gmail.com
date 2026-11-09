@@ -27,7 +27,6 @@ export default function SurinCourtWarrantApp() {
     return `${hours}:${minutes}`;
   };
 
-  // ฟังก์ชันคำนวณสัปดาห์ปัจจุบัน รองรับทั้งปี ค.ศ. และ พ.ศ. (จันทร์ - อาทิตย์)
   const isDateInCurrentWeek = (dateString) => {
     if (!dateString) return false;
     try {
@@ -38,13 +37,13 @@ export default function SurinCourtWarrantApp() {
       const month = parseInt(parts[1], 10) - 1;
       const day = parseInt(parts[2], 10);
 
-      if (year > 2400) year -= 543; // แปลง พ.ศ. เป็น ค.ศ.
+      if (year > 2400) year -= 543;
 
       const target = new Date(year, month, day, 12, 0, 0);
       const now = new Date();
       now.setHours(12, 0, 0, 0);
 
-      const dayOfWeek = now.getDay(); // 0 = อาทิตย์, 1 = จันทร์
+      const dayOfWeek = now.getDay();
       const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 
       const monday = new Date(now);
@@ -113,10 +112,18 @@ export default function SurinCourtWarrantApp() {
 
   const saveLocalBackup = (username, records) => {
     if (!username || !Array.isArray(records)) return;
+    const clean = username.trim().toLowerCase();
     try {
-      const clean = username.trim().toLowerCase();
       localStorage.setItem(`srnc_warrants_backup_${clean}`, JSON.stringify(records));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.warn("Storage quota exceeded (Safari iOS), saving without photos:", e);
+      try {
+        const recordsWithoutPhotos = records.map(r => ({ ...r, photos: [] }));
+        localStorage.setItem(`srnc_warrants_backup_${clean}`, JSON.stringify(recordsWithoutPhotos));
+      } catch (err) {
+        console.error("Critical Storage Error:", err);
+      }
+    }
   };
 
   const [currentRecords, setCurrentRecords] = useState(() => {
@@ -289,42 +296,50 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 1800, maxHeight = 1800, quality = 0.9) => {
+  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) => {
     return new Promise((resolve) => {
+      if (!file) {
+        resolve('');
+        return;
+      }
       const reader = new FileReader();
-      reader.readAsDataURL(file);
+      reader.onerror = () => resolve('');
       reader.onload = (event) => {
         const img = new window.Image();
-        img.src = event.target.result;
+        img.onerror = () => resolve('');
         img.onload = () => {
-          let width = img.width;
-          let height = img.height;
+          try {
+            let width = img.width;
+            let height = img.height;
 
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
+            if (width > height) {
+              if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = Math.round((width * maxHeight) / height);
+                height = maxHeight;
+              }
             }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedDataUrl);
+          } catch (err) {
+            console.error("Canvas Compression Error on iOS:", err);
+            resolve(event.target.result);
           }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(compressedDataUrl);
         };
+        img.src = event.target.result;
       };
+      reader.readAsDataURL(file);
     });
   };
 
@@ -340,8 +355,12 @@ export default function SurinCourtWarrantApp() {
     for (const file of files) {
       try {
         const compressedBase64 = await compressImage(file);
-        newPhotos.push(compressedBase64);
-      } catch (err) { console.error(err); }
+        if (compressedBase64) {
+          newPhotos.push(compressedBase64);
+        }
+      } catch (err) { 
+        console.error(err); 
+      }
     }
 
     if (newPhotos.length > 0) {
@@ -509,19 +528,24 @@ export default function SurinCourtWarrantApp() {
       isSaved: true
     };
 
-    const updatedList = currentRecords.map(rec => rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec);
+    const updatedList = currentRecords.map(rec => 
+      rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec
+    );
+    
     setCurrentRecords(updatedList);
     saveLocalBackup(activeUsername, updatedList);
 
     try {
-      await syncBatchToBackend([updatedRecord]);
-      await sendToGoogleScript({ action: 'saveBatch', records: [updatedRecord] });
+      await Promise.allSettled([
+        syncBatchToBackend([updatedRecord]),
+        sendToGoogleScript({ action: 'saveBatch', records: [updatedRecord] })
+      ]);
 
       await addAuditLog('SAVE_WARRANT', `บันทึกรายงานผลส่งหมาย: ${formData.targetName} (คดีดำ: ${formData.blackNo || '-'})`);
       alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จ!`);
     } catch (err) { 
-      console.error(err);
-      alert(`บันทึกรายงานผลของ "${formData.targetName}" สำเร็จเรียบร้อยแล้ว (สำรองในเครื่องถาวร)`);
+      console.error("Save Error:", err);
+      alert(`บันทึกข้อมูลเรียบร้อยแล้ว`);
     }
   };
 
@@ -773,19 +797,11 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
-  // 1. คดีที่ยังรอดำเนินการ: แสดงคดีทั้งหมดที่ยังไม่เสร็จของ User นี้
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
-
-  // 2. คดีที่รายงานแล้วใน "สัปดาห์นี้": แสดงเฉพาะสัปดาห์ปัจจุบัน (สัปดาห์ต่อสัปดาห์)
   const weeklyCompletedRecords = currentRecords.filter(r => r.isSaved && isDateInCurrentWeek(r.sendDate));
-
-  // คดีที่รายงานแล้วทั้งหมดในประวัติ
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
-
-  // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว
   const availablePrintDates = Array.from(new Set(allCompletedRecords.map(r => r.sendDate).filter(Boolean))).sort().reverse();
 
-  // แสดงผลตามแท็บ: รอดำเนินการ หรือ รายงานแล้วของสัปดาห์นี้
   let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : weeklyCompletedRecords;
   
   if (searchQuery.trim() !== '') {

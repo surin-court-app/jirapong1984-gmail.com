@@ -27,6 +27,40 @@ export default function SurinCourtWarrantApp() {
     return `${hours}:${minutes}`;
   };
 
+  // ฟังก์ชันคำนวณสัปดาห์ปัจจุบัน รองรับทั้งปี ค.ศ. และ พ.ศ. (จันทร์ - อาทิตย์)
+  const isDateInCurrentWeek = (dateString) => {
+    if (!dateString) return false;
+    try {
+      const parts = String(dateString).trim().split('-');
+      if (parts.length !== 3) return false;
+
+      let year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+
+      if (year > 2400) year -= 543; // แปลง พ.ศ. เป็น ค.ศ.
+
+      const target = new Date(year, month, day, 12, 0, 0);
+      const now = new Date();
+      now.setHours(12, 0, 0, 0);
+
+      const dayOfWeek = now.getDay(); // 0 = อาทิตย์, 1 = จันทร์
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      return target >= monday && target <= sunday;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const warrantResultOptions = [
     "ส่งได้โดยวิธีปิดหมาย",
     "ส่งได้รับได้ด้วยตัวเอง",
@@ -63,7 +97,7 @@ export default function SurinCourtWarrantApp() {
 
   const [printMode, setPrintMode] = useState('single');
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [selectedPrintDate, setSelectedPrintDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedPrintDate, setSelectedPrintDate] = useState('ALL');
 
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,27 +170,38 @@ export default function SurinCourtWarrantApp() {
     if (backup.length > 0) setCurrentRecords(backup);
 
     try {
-      const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
       let backendWarrants = [];
-      if (resBackend.ok) {
-        backendWarrants = await resBackend.json();
+      try {
+        const resBackend = await fetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
+        if (resBackend.ok) {
+          backendWarrants = await resBackend.json();
+        }
+      } catch (err) {
+        console.warn("Backend fetch error:", err);
       }
 
-      const resGS = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
       let gsWarrants = [];
-      if (resGS.ok) {
-        const data = await resGS.json();
-        if (Array.isArray(data)) {
-          gsWarrants = data.map(w => ({
-            ...w,
-            isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1"
-          }));
+      try {
+        const resGS = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
+        if (resGS.ok) {
+          const data = await resGS.json();
+          if (Array.isArray(data)) {
+            gsWarrants = data.map(w => ({
+              ...w,
+              isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1" || w.isSaved === "true"
+            }));
+          }
         }
+      } catch (err) {
+        console.warn("Google Script fetch error:", err);
       }
 
       const mergedMap = new Map();
       backup.forEach(item => mergedMap.set(item.id, item));
-      backendWarrants.forEach(item => mergedMap.set(item.id, { ...item, isSaved: Boolean(item.isSaved) }));
+      backendWarrants.forEach(item => mergedMap.set(item.id, { 
+        ...item, 
+        isSaved: Boolean(item.isSaved === true || item.isSaved === 1 || item.isSaved === "1" || item.isSaved === "true") 
+      }));
       gsWarrants.forEach(item => mergedMap.set(item.id, item));
 
       const mergedList = Array.from(mergedMap.values());
@@ -233,7 +278,7 @@ export default function SurinCourtWarrantApp() {
   const formatThaiDate = (dateString) => {
     if (!dateString) return "....................";
     const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-    const parts = dateString.split('-');
+    const parts = String(dateString).split('-');
     if (parts.length === 3) {
       const day = parseInt(parts[2], 10);
       const month = thaiMonths[parseInt(parts[1], 10) - 1];
@@ -406,7 +451,7 @@ export default function SurinCourtWarrantApp() {
           setCurrentBatchId(newBatchId);
           setExcelFilterStatus('pending');
 
-          const updatedList = [...currentRecords.filter(r => r.ownerUsername !== activeUsername), ...parsedRecords];
+          const updatedList = [...currentRecords, ...parsedRecords];
           setCurrentRecords(updatedList);
           saveLocalBackup(activeUsername, updatedList);
 
@@ -706,7 +751,7 @@ export default function SurinCourtWarrantApp() {
 
     currentRecords.forEach(rec => {
       const dateStr = rec.sendDate || todayStr;
-      const parts = dateStr.split('-');
+      const parts = String(dateStr).split('-');
       if (parts.length === 3) {
         let rawYear = parseInt(parts[0], 10);
         if (isNaN(rawYear)) return;
@@ -728,10 +773,20 @@ export default function SurinCourtWarrantApp() {
 
   const archivedData = getGroupedArchive();
 
+  // 1. คดีที่ยังรอดำเนินการ: แสดงคดีทั้งหมดที่ยังไม่เสร็จของ User นี้
   const pendingRecords = currentRecords.filter(r => !r.isSaved);
+
+  // 2. คดีที่รายงานแล้วใน "สัปดาห์นี้": แสดงเฉพาะสัปดาห์ปัจจุบัน (สัปดาห์ต่อสัปดาห์)
+  const weeklyCompletedRecords = currentRecords.filter(r => r.isSaved && isDateInCurrentWeek(r.sendDate));
+
+  // คดีที่รายงานแล้วทั้งหมดในประวัติ
   const allCompletedRecords = currentRecords.filter(r => r.isSaved);
 
-  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : allCompletedRecords;
+  // ดึงรายการวันที่ทั้งหมดที่มีการรายงานแล้ว
+  const availablePrintDates = Array.from(new Set(allCompletedRecords.map(r => r.sendDate).filter(Boolean))).sort().reverse();
+
+  // แสดงผลตามแท็บ: รอดำเนินการ หรือ รายงานแล้วของสัปดาห์นี้
+  let displayedRecords = excelFilterStatus === 'pending' ? pendingRecords : weeklyCompletedRecords;
   
   if (searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase().trim();
@@ -756,7 +811,7 @@ export default function SurinCourtWarrantApp() {
   });
 
   const recordsToBatchPrint = selectedPrintDate === 'ALL'
-    ? allCompletedRecords
+    ? weeklyCompletedRecords
     : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
 
   if (!isLoggedIn) {
@@ -1009,7 +1064,7 @@ export default function SurinCourtWarrantApp() {
                       excelFilterStatus === 'completed' && !searchQuery ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-amber-300/60'
                     }`}
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้ว ({allCompletedRecords.length})
+                    <CheckCircle className="w-3.5 h-3.5" /> รายงานแล้วสัปดาห์นี้ ({weeklyCompletedRecords.length})
                   </button>
                 </div>
               </div>
@@ -1026,7 +1081,7 @@ export default function SurinCourtWarrantApp() {
                           {item.isSaved && <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold">รายงานแล้ว</span>}
                         </div>
                         <div className="text-gray-600">ถึง: <span className="font-bold text-gray-900">{item.targetName}</span></div>
-                        <div className="text-gray-500">{item.warrantType} | อ.{item.district || '-'}</div>
+                        <div className="text-gray-500">{item.warrantType} | อ.{item.district || '-'} | {formatThaiDate(item.sendDate)}</div>
                       </div>
                       
                       <div className="flex items-center gap-1">
@@ -1051,7 +1106,9 @@ export default function SurinCourtWarrantApp() {
                 </div>
               ) : (
                 <div className="text-center py-6 bg-white rounded-lg border border-dashed border-amber-300 text-xs text-gray-500">
-                  ยังไม่มีรายการคดีในบัญชีของ <span className="font-bold text-amber-900">{currentUser?.fullName}</span>
+                  {excelFilterStatus === 'completed'
+                    ? "ยังไม่มีรายการคดีที่บันทึกรายงานผลในสัปดาห์นี้ (สามารถดูประวัติเก่าในคลังโฟลเดอร์ย้อนหลัง)"
+                    : `ยังไม่มีรายการคดีรอดำเนินการในบัญชีของ ${currentUser?.fullName || ''}`}
                 </div>
               )}
             </div>
@@ -1290,14 +1347,14 @@ export default function SurinCourtWarrantApp() {
                   type="button" 
                   onClick={() => {
                     if (allCompletedRecords.length === 0) {
-                      alert("ยังไม่มีรายการคดีที่บันทึกรายงานผลเข้าระบบ");
+                      alert("ยังไม่มีรายการคดีที่เคยบันทึกรายงานผลในระบบเลย");
                       return;
                     }
                     setShowPrintModal(true);
                   }} 
                   className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600 cursor-pointer"
                 >
-                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด ({allCompletedRecords.length})
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด {weeklyCompletedRecords.length > 0 ? `(${weeklyCompletedRecords.length})` : ''}
                 </button>
               </div>
             </form>
@@ -1495,35 +1552,63 @@ export default function SurinCourtWarrantApp() {
             <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-amber-300 space-y-4">
               <div className="flex justify-between items-center border-b border-gray-200 pb-3">
                 <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-emerald-700" /> เลือกวันที่ต้องการพิมพ์รายงานทั้งหมด
+                  <Calendar className="w-5 h-5 text-emerald-700" /> เลือกวันที่ต้องการพิมพ์รายงาน
                 </h3>
-                <button onClick={() => setShowPrintModal(false)} className="text-gray-400 hover:text-gray-600">
+                <button onClick={() => setShowPrintModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <label className="block text-xs font-bold text-gray-700 uppercase">กรองตามวันที่ส่งหมาย:</label>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={selectedPrintDate === 'ALL' ? '' : selectedPrintDate}
-                    onChange={(e) => setSelectedPrintDate(e.target.value)}
-                    className="flex-1 p-2 bg-amber-50/50 border border-amber-300 rounded-lg text-sm text-gray-800 font-medium"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPrintDate('ALL')}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                      selectedPrintDate === 'ALL' ? 'bg-amber-800 text-white border-amber-800' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                    }`}
-                  >
-                    พิมพ์ทุกวัน
-                  </button>
+              <div className="space-y-4 text-xs">
+                {availablePrintDates.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-gray-700 uppercase">
+                      📌 คลิกเลือกวันที่ที่เคยบันทึกไว้:
+                    </label>
+                    <select
+                      value={selectedPrintDate}
+                      onChange={(e) => setSelectedPrintDate(e.target.value)}
+                      className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">-- พิมพ์รายงานสัปดาห์นี้ทั้งหมด ({weeklyCompletedRecords.length} คดี) --</option>
+                      {availablePrintDates.map((dateStr) => {
+                        const count = allCompletedRecords.filter(r => r.sendDate === dateStr).length;
+                        return (
+                          <option key={dateStr} value={dateStr}>
+                            วันที่ {formatThaiDate(dateStr)} ({count} คดี)
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="block font-bold text-gray-700 uppercase">
+                    📅 หรือระบุวันที่ส่งหมายในปฏิทิน:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={selectedPrintDate === 'ALL' ? '' : selectedPrintDate}
+                      onChange={(e) => setSelectedPrintDate(e.target.value)}
+                      className="flex-1 p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPrintDate('ALL')}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                        selectedPrintDate === 'ALL' ? 'bg-amber-800 text-white border-amber-800' : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                      }`}
+                    >
+                      สัปดาห์นี้
+                    </button>
+                  </div>
                 </div>
 
-                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                  จะพิมพ์เฉพาะรายการที่บันทึกแล้ว จำนวน: <span className="font-bold text-emerald-700 text-sm">{recordsToBatchPrint.length}</span> รายการ
+                <div className="text-xs text-gray-600 bg-amber-50/60 p-3 rounded-lg border border-amber-200 flex justify-between items-center">
+                  <span>จำนวนคดีที่จะพิมพ์:</span>
+                  <span className="font-bold text-emerald-800 text-sm">{recordsToBatchPrint.length} รายการ</span>
                 </div>
               </div>
 
@@ -1541,7 +1626,7 @@ export default function SurinCourtWarrantApp() {
                   disabled={recordsToBatchPrint.length === 0}
                   className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold py-2.5 rounded-xl text-xs shadow transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <PrinterCheck className="w-4 h-4" /> ยืนยันพิมพ์ ({recordsToBatchPrint.length} คดี)
+                  <PrinterCheck className="w-4 h-4" /> พิมพ์เอกสาร ({recordsToBatchPrint.length} คดี)
                 </button>
               </div>
             </div>
