@@ -11,18 +11,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ดึงจาก Environment Variables ของ Render (หากไม่มีจะใช้ค่า fallback)
 const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 const JWT_SECRET = process.env.JWT_SECRET || 'srnc-court-warrant-secure-key-2026';
 
-// -------------------------------------------------------------
-// เสริมเกราะป้องกัน HTTP Security Headers (Built-in)
-// -------------------------------------------------------------
-app.disable('x-powered-by'); // ซ่อนเวอร์ชัน Express ป้องกันแฮกเกอร์สแกนหาช่องโหว่
+app.disable('x-powered-by');
 
 app.use((req, res, next) => {
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // ป้องกัน Clickjacking
-  res.setHeader('X-Content-Type-Options', 'nosniff'); // ป้องกัน MIME sniffing
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
@@ -32,7 +28,6 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-// เชื่อมต่อ Database
 const dbUrl = process.env.TURSO_DATABASE_URL || "file:surin_court.db";
 const dbAuthToken = process.env.TURSO_AUTH_TOKEN || "";
 
@@ -45,9 +40,7 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(String(password)).digest('hex');
 }
 
-// -------------------------------------------------------------
-// Rate Limiting (ป้องกัน Brute Force Login)
-// -------------------------------------------------------------
+// Rate Limiting
 const loginAttempts = new Map();
 
 const rateLimiter = (req, res, next) => {
@@ -71,7 +64,7 @@ const recordFailedAttempt = (ip) => {
   const attempt = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
   attempt.count += 1;
   if (attempt.count >= 5) {
-    attempt.lockUntil = now + 15 * 60 * 1000; // ล็อก 15 นาที
+    attempt.lockUntil = now + 15 * 60 * 1000;
     attempt.count = 0;
   }
   loginAttempts.set(ip, attempt);
@@ -81,12 +74,10 @@ const clearFailedAttempt = (ip) => {
   loginAttempts.delete(ip);
 };
 
-// -------------------------------------------------------------
-// Token Verification (อายุ 12 ชั่วโมง)
-// -------------------------------------------------------------
+// Token
 function generateToken(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const exp = Date.now() + 12 * 60 * 60 * 1000; // ปรับเหลือ 12 ชั่วโมง
+  const exp = Date.now() + 12 * 60 * 60 * 1000;
   const data = Buffer.from(JSON.stringify({ ...payload, exp })).toString('base64url');
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${data}`).digest('base64url');
   return `${header}.${data}.${signature}`;
@@ -148,7 +139,7 @@ async function forwardToGoogleScript(payload) {
   }
 }
 
-// สร้างตารางข้อมูล
+// กำหนดโครงสร้างฐานข้อมูล
 const initDb = async () => {
   try {
     await db.execute(`
@@ -182,8 +173,7 @@ const initDb = async () => {
         password TEXT,
         fullName TEXT,
         position TEXT,
-        role TEXT,
-        requirePasswordChange INTEGER DEFAULT 0
+        role TEXT
       )
     `);
 
@@ -199,15 +189,16 @@ const initDb = async () => {
       )
     `);
 
+    // ตรวจสอบและเพิ่ม Admin เริ่มต้นโดยใช้เฉพาะคอลัมน์มาตรฐาน
     const defaultPassword = '123456';
     const defaultHashedPassword = hashPassword(defaultPassword);
 
     await db.execute({
-      sql: `INSERT OR IGNORE INTO users (id, username, password, fullName, position, role, requirePasswordChange) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: ['admin_default', 'tomsound', defaultHashedPassword, 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin', 1]
+      sql: `INSERT OR IGNORE INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: ['admin_default', 'tomsound', defaultHashedPassword, 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin']
     });
 
-    console.log("Database initialized successfully with Hardened Security");
+    console.log("Database initialized successfully without schema conflicts");
   } catch (err) {
     console.error("Database Init Error:", err);
   }
@@ -249,8 +240,8 @@ app.post('/api/login', rateLimiter, async (req, res) => {
     if (isMatch) {
       clearFailedAttempt(clientIp);
 
-      // ตรวจสอบว่ายังเป็นรหัสผ่านเริ่มต้นหรือไม่ (123456)
-      const isDefaultPassword = (password === '123456') || (user.requirePasswordChange === 1);
+      // หากรหัสผ่านที่ส่งมายังเป็น 123456 จะแจ้งเตือนให้เปลี่ยนรหัสทันที
+      const isDefaultPassword = (password === '123456');
 
       const safeUser = {
         id: user.id,
@@ -271,7 +262,6 @@ app.post('/api/login', rateLimiter, async (req, res) => {
   }
 });
 
-// เปลี่ยนรหัสผ่านของตนเอง
 app.post('/api/change-password', authenticateToken, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!newPassword || newPassword.length < 8) {
@@ -297,7 +287,7 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
 
     const newHashed = hashPassword(newPassword);
     await db.execute({
-      sql: "UPDATE users SET password = ?, requirePasswordChange = 0 WHERE id = ?",
+      sql: "UPDATE users SET password = ? WHERE id = ?",
       args: [newHashed, req.user.id]
     });
 
@@ -329,7 +319,7 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const secureHashedPassword = hashPassword(password);
     await db.execute({
-      sql: `INSERT INTO users (id, username, password, fullName, position, role, requirePasswordChange) VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      sql: `INSERT INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
       args: [newId, (username || '').trim().toLowerCase(), secureHashedPassword, fullName, position, role || 'user']
     });
     res.json({ success: true });
