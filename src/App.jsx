@@ -615,9 +615,11 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
-  const handleChangePasswordSubmit = async (e) => {
+ const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
-    if (newPasswordChange.length < 8) {
+    setPwdChangeError('');
+
+    if (newPasswordChange.trim().length < 8) {
       return setPwdChangeError('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 8 ตัวอักษร');
     }
     if (newPasswordChange !== confirmPasswordChange) {
@@ -633,8 +635,9 @@ export default function SurinCourtWarrantApp() {
           newPassword: newPasswordChange
         })
       });
+      
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         alert('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว!');
         setShowPasswordChangeModal(false);
         setOldPasswordChange('');
@@ -645,10 +648,10 @@ export default function SurinCourtWarrantApp() {
         setCurrentUser(updatedUser);
         localStorage.setItem('srnc_court_user', JSON.stringify(updatedUser));
       } else {
-        setPwdChangeError(data.message);
+        setPwdChangeError(data.message || 'รหัสผ่านเดิมไม่ถูกต้อง หรือไม่สามารถเปลี่ยนได้');
       }
     } catch (err) {
-      setPwdChangeError('ไม่สามารถเปลี่ยนรหัสผ่านได้ กรุณาลองใหม่');
+      setPwdChangeError(err.message || 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
     }
   };
 
