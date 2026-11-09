@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@libsql/client';
-import bcrypt from 'bcryptjs';
+import crypto from 'crypto'; // ใช้โมดูลมาตรฐานของ Node.js โดยตรง ไม่ต้องติดตั้งแพ็กเกจเพิ่ม
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,15 +11,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// URL ปลายทางของ Google Apps Script ปิดไว้ที่ฝั่ง Backend เพื่อความปลอดภัย
+// URL ปลายทางของ Google Apps Script
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
-// ขยายขีดจำกัด Payload เป็น 100MB รองรับการแนบภาพถ่ายความละเอียดสูงหลายภาพ
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-// เชื่อมต่อ Turso Cloud Database หรือ Local SQLite
+// เชื่อมต่อ Database
 const dbUrl = process.env.TURSO_DATABASE_URL || "file:surin_court.db";
 const dbAuthToken = process.env.TURSO_AUTH_TOKEN || "";
 
@@ -27,6 +26,11 @@ const db = createClient({
   url: dbUrl,
   authToken: dbAuthToken
 });
+
+// ฟังก์ชันเข้ารหัสผ่านความปลอดภัยสูงด้วย SHA-256 มาตรฐาน Node.js
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(String(password)).digest('hex');
+}
 
 // ฟังก์ชัน Proxy ส่งข้อมูลต่อไปยัง Google Apps Script
 async function forwardToGoogleScript(payload) {
@@ -44,7 +48,7 @@ async function forwardToGoogleScript(payload) {
   }
 }
 
-// สร้างโครงสร้างตารางข้อมูลในระบบ
+// สร้างโครงสร้างตารางข้อมูล
 const initDb = async () => {
   try {
     await db.execute(`
@@ -94,17 +98,16 @@ const initDb = async () => {
       )
     `);
 
-    // บันทึก Admin เริ่มต้นแบบเข้ารหัสผ่าน bcrypt (รหัสผ่านเดิม: 123456)
+    // บันทึก Admin เริ่มต้น
     const defaultPassword = '123456';
-    const salt = await bcrypt.genSalt(10);
-    const defaultHashedPassword = await bcrypt.hash(defaultPassword, salt);
+    const defaultHashedPassword = hashPassword(defaultPassword);
 
     await db.execute({
       sql: `INSERT OR IGNORE INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
       args: ['admin_default', 'tomsound', defaultHashedPassword, 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin']
     });
 
-    console.log("Database initialized successfully with secure password hashing");
+    console.log("Database initialized successfully with secure Node.js crypto");
   } catch (err) {
     console.error("Database Init Error:", err);
   }
@@ -116,7 +119,7 @@ initDb();
 // API Routes: Users & Auth
 // -------------------------------------------------------------
 
-// ดึงรายชื่อผู้ใช้ (ตัดข้อมูล Password ออกเพื่อความปลอดภัยของระบบ)
+// ดึงรายชื่อผู้ใช้ (ตัดข้อมูล Password ออกเพื่อความปลอดภัย)
 app.get('/api/users', async (req, res) => {
   try {
     const result = await db.execute("SELECT id, username, fullName, position, role FROM users");
@@ -126,7 +129,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// เพิ่มผู้ใช้งานใหม่ (เข้ารหัส Password ก่อนบันทึกลงฐานข้อมูล)
+// เพิ่มผู้ใช้งานใหม่ (เข้ารหัส Password อัตโนมัติ)
 app.post('/api/users', async (req, res) => {
   const { username, password, fullName, position, role } = req.body;
   if (!username || !password) {
@@ -135,12 +138,11 @@ app.post('/api/users', async (req, res) => {
 
   const newId = `user_${Date.now()}`;
   try {
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const secureHashedPassword = hashPassword(password);
 
     await db.execute({
       sql: `INSERT INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [newId, (username || '').trim().toLowerCase(), hashedPassword, fullName, position, role || 'user']
+      args: [newId, (username || '').trim().toLowerCase(), secureHashedPassword, fullName, position, role || 'user']
     });
     res.json({ success: true });
   } catch (err) {
@@ -148,17 +150,15 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-// แก้ไขข้อมูลผู้ใช้งาน (หากมีการเปลี่ยนรหัสผ่าน จะเข้ารหัสใหม่ให้ทันที)
+// แก้ไขข้อมูลผู้ใช้งาน
 app.put('/api/users/:id', async (req, res) => {
   const { username, password, fullName, position, role } = req.body;
   try {
-    if (password && password.trim() !== '' && !password.startsWith('$2a$') && !password.startsWith('$2b$')) {
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
+    if (password && password.trim() !== '') {
+      const secureHashedPassword = hashPassword(password);
       await db.execute({
         sql: `UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?`,
-        args: [(username || '').trim().toLowerCase(), hashedPassword, fullName, position, role, req.params.id]
+        args: [(username || '').trim().toLowerCase(), secureHashedPassword, fullName, position, role, req.params.id]
       });
     } else {
       await db.execute({
@@ -184,7 +184,7 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-// ระบบตรวจสอบการเข้าสู่ระบบ (รองรับทั้งรหัส bcrypt และรหัสเดิมแบบ Plain text)
+// ตรวจสอบการเข้าสู่ระบบ (รองรับทั้งรหัสเข้ารหัส และรหัสเดิมแบบ Plain Text)
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const cleanUsername = (username || '').trim();
@@ -200,22 +200,17 @@ app.post('/api/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-    let isMatch = false;
+    const incomingHashed = hashPassword(password);
+    
+    // ตรวจสอบรหัสผ่าน: ตรงกับ SHA-256 หรือ ตรงกับรหัสเดิมที่เป็น Plain text
+    let isMatch = (user.password === incomingHashed) || (user.password === password);
 
-    if (user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'))) {
-      isMatch = await bcrypt.compare(password, user.password);
-    } else {
-      // ตรวจสอบกับรหัสเดิมที่ยังไม่ได้ Hash
-      isMatch = (user.password === password);
-      // หากเข้าสู่ระบบสำเร็จ จะอัปเดตรหัสให้เป็น bcrypt อัตโนมัติ
-      if (isMatch) {
-        const salt = await bcrypt.genSalt(10);
-        const autoHashed = await bcrypt.hash(password, salt);
-        await db.execute({
-          sql: "UPDATE users SET password = ? WHERE id = ?",
-          args: [autoHashed, user.id]
-        });
-      }
+    // หากตรวจสอบผ่านจากรหัสเดิมที่เป็น Plain text ให้ปรับเป็น SHA-256 อัตโนมัติ
+    if (isMatch && user.password === password) {
+      await db.execute({
+        sql: "UPDATE users SET password = ? WHERE id = ?",
+        args: [incomingHashed, user.id]
+      });
     }
 
     if (isMatch) {
@@ -236,10 +231,9 @@ app.post('/api/login', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// API Routes: Warrants & Google Sheets Sync
+// API Routes: Warrants & Google Sheets Proxy
 // -------------------------------------------------------------
 
-// Backend Proxy เชื่อมต่อไปยัง Google Apps Script เพื่อความปลอดภัย
 app.post('/api/sync-google-sheet', async (req, res) => {
   try {
     const success = await forwardToGoogleScript(req.body);
@@ -249,7 +243,6 @@ app.post('/api/sync-google-sheet', async (req, res) => {
   }
 });
 
-// ดึงข้อมูลคดีตาม Username
 app.get('/api/warrants/:username', async (req, res) => {
   const cleanUsername = (req.params.username || '').trim();
   try {
@@ -267,7 +260,6 @@ app.get('/api/warrants/:username', async (req, res) => {
   }
 });
 
-// บันทึกคดีแบบกลุ่ม (Batch Upsert)
 app.post('/api/warrants/batch', async (req, res) => {
   const { username, records } = req.body;
   if (!Array.isArray(records)) return res.status(400).json({ error: "Invalid records format" });
@@ -363,7 +355,6 @@ app.delete('/api/audit-logs/clear-old', async (req, res) => {
   }
 });
 
-// ให้บริการไฟล์ Static จากโฟลเดอร์ dist ของหน้าเว็บ React
 app.use(express.static(path.join(__dirname, '../dist')));
 
 app.get('*', (req, res) => {
