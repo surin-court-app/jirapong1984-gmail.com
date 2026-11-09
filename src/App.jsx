@@ -2,19 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 
+// ปรับให้ส่งผ่าน Server เพื่อปิดบัง Google Apps Script URL จากเบราว์เซอร์
 const sendToGoogleScript = async (payload) => {
   try {
-    await fetch(GOOGLE_SCRIPT_URL, {
+    const res = await fetch(`${API_URL}/sync-google-sheet`, {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return true;
+    return res.ok;
   } catch (err) {
-    console.error("Fetch Error:", err);
+    console.warn("Backend proxy sync fallback:", err);
     return false;
   }
 };
@@ -158,7 +157,11 @@ export default function SurinCourtWarrantApp() {
   const fetchUsers = async () => {
     try {
       const res = await fetch(`${API_URL}/users`);
-      if (res.ok) setUsers(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        // ซ่อนรหัสผ่านไม่ให้แสดงตัวจริง
+        setUsers(data.map(u => ({ ...u, password: '••••••••' })));
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -187,29 +190,12 @@ export default function SurinCourtWarrantApp() {
         console.warn("Backend fetch error:", err);
       }
 
-      let gsWarrants = [];
-      try {
-        const resGS = await fetch(`${GOOGLE_SCRIPT_URL}?action=getWarrants&username=${encodeURIComponent(cleanUser)}`);
-        if (resGS.ok) {
-          const data = await resGS.json();
-          if (Array.isArray(data)) {
-            gsWarrants = data.map(w => ({
-              ...w,
-              isSaved: Number(w.isSaved) === 1 || w.isSaved === true || w.isSaved === "1" || w.isSaved === "true"
-            }));
-          }
-        }
-      } catch (err) {
-        console.warn("Google Script fetch error:", err);
-      }
-
       const mergedMap = new Map();
       backup.forEach(item => mergedMap.set(item.id, item));
       backendWarrants.forEach(item => mergedMap.set(item.id, { 
         ...item, 
         isSaved: Boolean(item.isSaved === true || item.isSaved === 1 || item.isSaved === "1" || item.isSaved === "true") 
       }));
-      gsWarrants.forEach(item => mergedMap.set(item.id, item));
 
       const mergedList = Array.from(mergedMap.values());
       setCurrentRecords(mergedList);
@@ -676,6 +662,7 @@ export default function SurinCourtWarrantApp() {
       if (data.success) {
         setIsLoggedIn(true);
         setCurrentUser(data.user);
+        // บันทึกเฉพาะข้อมูลจำเป็น ปลอดภัย ไม่เก็บรหัสผ่านในเครื่อง
         localStorage.setItem('srnc_court_user', JSON.stringify(data.user));
         setLoginError('');
         setPasswordInput('');
@@ -684,7 +671,7 @@ export default function SurinCourtWarrantApp() {
         fetchUserWarrants(data.user.username);
         addAuditLog('LOGIN', 'เข้าสู่ระบบสำเร็จ', data.user);
       } else {
-        setLoginError(data.message);
+        setLoginError(data.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
       }
     } catch (err) {
       setLoginError('ไม่สามารถเชื่อมต่อ Server ได้');
@@ -837,7 +824,7 @@ export default function SurinCourtWarrantApp() {
           <div className="bg-gray-900 text-center p-6 border-b-4 border-yellow-500 flex flex-col items-center">
             <img src="/srnc-picture.png" alt="ตราศาล" className="w-24 h-24 object-contain mb-3 drop-shadow-md" onError={(e) => e.target.src = "/srncpicture.png"} />
             <h1 className="text-xl font-extrabold text-yellow-400 tracking-wide">ศาลจังหวัดสุรินทร์</h1>
-            <p className="text-xs text-gray-300 mt-1">ระบบงานบันทึกและติดตามการส่งหมายศาลอิเล็กทรอนิกส์ (Google Sheets Online)</p>
+            <p className="text-xs text-gray-300 mt-1">ระบบงานบันทึกและติดตามการส่งหมายศาลอิเล็กทรอนิกส์</p>
           </div>
           <div className="p-6 md:p-8 space-y-6">
             <div className="text-center">
@@ -854,7 +841,7 @@ export default function SurinCourtWarrantApp() {
                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Password</label>
                 <div className="relative"><Lock className="w-4 h-4 text-gray-400 absolute left-3 top-3" /><input type="password" required value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-amber-600 focus:outline-none" placeholder="ป้อนรหัสผ่าน" /></div>
               </div>
-              <button type="submit" className="w-full bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white font-bold py-3 rounded-xl shadow-lg transition duration-200 text-sm flex items-center justify-center gap-2"><CheckCircle2 className="w-4 h-4" /> เข้าสู่ระบบ</button>
+              <button type="submit" className="w-full bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white font-bold py-3 rounded-xl shadow-lg transition duration-200 text-sm flex items-center justify-center gap-2 cursor-pointer"><CheckCircle2 className="w-4 h-4" /> เข้าสู่ระบบ</button>
             </form>
           </div>
         </div>
@@ -968,7 +955,7 @@ export default function SurinCourtWarrantApp() {
             <img src="/srnc-picture.png" alt="ตราศาล" className="w-12 h-12 object-contain drop-shadow" onError={(e) => e.target.src = "/srncpicture.png"} />
             <div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-yellow-400 flex items-center gap-2">ระบบบันทึกและติดตามการส่งหมายศาล</h1>
-              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Google Sheets Sync Online</span></p>
+              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> ระบบปลอดภัย Secured Backend Sync</span></p>
             </div>
           </div>
 
@@ -1767,7 +1754,7 @@ export default function SurinCourtWarrantApp() {
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Password</label>
                   <input
-                    type="text"
+                    type="password"
                     required
                     value={newUser.password}
                     onChange={(e) => setNewUser({...newUser, password: e.target.value})}
@@ -1834,7 +1821,7 @@ export default function SurinCourtWarrantApp() {
                     <tr>
                       <th className="p-3">#</th>
                       <th className="p-3">Username</th>
-                      <th className="p-3">Password</th>
+                      <th className="p-3">สถานะรหัสผ่าน</th>
                       <th className="p-3">ชื่อ - นามสกุล</th>
                       <th className="p-3">ตำแหน่ง</th>
                       <th className="p-3">สิทธิ์ใช้งาน</th>
@@ -1865,13 +1852,13 @@ export default function SurinCourtWarrantApp() {
                           <td className="p-3 text-gray-500 font-mono text-xs">
                             {isEditing ? (
                               <input
-                                type="text"
-                                value={editUserData.password}
+                                type="password"
+                                placeholder="ป้อนรหัสใหม่ถ้าต้องการเปลี่ยน"
                                 onChange={(e) => setEditUserData({...editUserData, password: e.target.value})}
                                 className="w-full p-1 bg-white border border-gray-300 rounded text-xs"
                               />
                             ) : (
-                              "••••••"
+                              <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">เข้ารหัสปลอดภัย</span>
                             )}
                           </td>
 
@@ -1943,7 +1930,7 @@ export default function SurinCourtWarrantApp() {
                             ) : (
                               <div className="flex items-center justify-center gap-1">
                                 <button
-                                  onClick={() => { setEditingUserId(u.id); setEditUserData({ ...u }); }}
+                                  onClick={() => { setEditingUserId(u.id); setEditUserData({ ...u, password: '' }); }}
                                   className="text-blue-600 hover:text-blue-800 p-1.5 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                                   title="แก้ไขข้อมูล"
                                 >

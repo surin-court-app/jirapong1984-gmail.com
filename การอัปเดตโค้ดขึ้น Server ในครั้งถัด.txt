@@ -17,3 +17,10 @@ git push origin main
 ใช้เวลาประมาณ 1–2 นาที หน้าเว็บ https://surin-court-app.onrender.com ก็จะอัปเดตเป็นเวอร์ชันล่าสุดให้ทันทีครับ
 
 https://dashboard.render.com/
+
+
+PowerShell
+npm run build
+git add .
+git commit -m "Fix iOS Safari compression storage error and weekly calendar parsing"
+git push origin main --force
