@@ -268,31 +268,41 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
     return res.status(400).json({ success: false, message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 8 ตัวอักษร' });
   }
 
+  const cleanOld = String(oldPassword || '').trim();
+  const cleanNew = String(newPassword || '').trim();
+  const userIdentifier = req.user?.username ? req.user.username.trim().toLowerCase() : '';
+
   try {
+    // ค้นหาจาก username หรือ id เพื่อความแม่นยำ 100%
     const result = await db.execute({
-      sql: "SELECT password FROM users WHERE id = ?",
-      args: [req.user.id]
+      sql: "SELECT id, password FROM users WHERE LOWER(username) = LOWER(?) OR id = ?",
+      args: [userIdentifier, req.user?.id || '']
     });
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลผู้ใช้งานในระบบ' });
     }
 
-    const currentHash = result.rows[0].password;
-    const oldHashed = hashPassword(oldPassword);
+    const user = result.rows[0];
+    const currentHash = String(user.password || '');
+    const oldHashed = hashPassword(cleanOld);
 
-    if (currentHash !== oldHashed && currentHash !== oldPassword) {
+    // ตรวจสอบทั้งกรณีที่ในฐานข้อมูลเป็น SHA-256 หรือเป็น Plain text เดิม
+    const isMatch = (currentHash === oldHashed) || (currentHash === cleanOld);
+
+    if (!isMatch) {
       return res.status(400).json({ success: false, message: 'รหัสผ่านเดิมไม่ถูกต้อง' });
     }
 
-    const newHashed = hashPassword(newPassword);
+    const newHashed = hashPassword(cleanNew);
     await db.execute({
       sql: "UPDATE users SET password = ? WHERE id = ?",
-      args: [newHashed, req.user.id]
+      args: [newHashed, user.id]
     });
 
     res.json({ success: true, message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว' });
   } catch (err) {
+    console.error("Change Password Error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
