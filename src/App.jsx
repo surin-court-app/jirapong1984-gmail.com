@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download } from 'lucide-react';
+import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download, KeyRound } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 
 const getAuthToken = () => localStorage.getItem('srnc_auth_token') || '';
 
-// ฟังก์ชัน Fetch แบบแนบ Token ยืนยันตัวตนอัตโนมัติ
 const authFetch = async (url, options = {}) => {
   const headers = {
     ...options.headers,
@@ -99,6 +98,13 @@ export default function SurinCourtWarrantApp() {
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('warrantForm');
+
+  // กล่องบังคับเปลี่ยนรหัสผ่าน
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [oldPasswordChange, setOldPasswordChange] = useState('');
+  const [newPasswordChange, setNewPasswordChange] = useState('');
+  const [confirmPasswordChange, setConfirmPasswordChange] = useState('');
+  const [pwdChangeError, setPwdChangeError] = useState('');
 
   const [printMode, setPrintMode] = useState('single');
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -213,6 +219,9 @@ export default function SurinCourtWarrantApp() {
 
   useEffect(() => {
     if (isLoggedIn) {
+      if (currentUser?.mustChangePassword) {
+        setShowPasswordChangeModal(true);
+      }
       if (currentUser?.role === 'admin') {
         fetchUsers();
         fetchAuditLogs();
@@ -594,11 +603,52 @@ export default function SurinCourtWarrantApp() {
         setFormData({ ...initialFormState, sendDate: todayStr, sendTime: getCurrentTimeStr() });
         fetchUserWarrants(data.user.username);
         addAuditLog('LOGIN', 'เข้าสู่ระบบสำเร็จ', data.user);
+
+        if (data.user.mustChangePassword) {
+          setShowPasswordChangeModal(true);
+        }
       } else {
         setLoginError(data.message || 'Username หรือ Password ไม่ถูกต้อง');
       }
     } catch (err) {
       setLoginError('ไม่สามารถเชื่อมต่อ Server ได้');
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (newPasswordChange.length < 8) {
+      return setPwdChangeError('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 8 ตัวอักษร');
+    }
+    if (newPasswordChange !== confirmPasswordChange) {
+      return setPwdChangeError('รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน');
+    }
+
+    try {
+      const res = await authFetch(`${API_URL}/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          oldPassword: oldPasswordChange,
+          newPassword: newPasswordChange
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว!');
+        setShowPasswordChangeModal(false);
+        setOldPasswordChange('');
+        setNewPasswordChange('');
+        setConfirmPasswordChange('');
+        setPwdChangeError('');
+        const updatedUser = { ...currentUser, mustChangePassword: false };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('srnc_court_user', JSON.stringify(updatedUser));
+      } else {
+        setPwdChangeError(data.message);
+      }
+    } catch (err) {
+      setPwdChangeError('ไม่สามารถเปลี่ยนรหัสผ่านได้ กรุณาลองใหม่');
     }
   };
 
@@ -632,14 +682,19 @@ export default function SurinCourtWarrantApp() {
   };
 
   const handleSaveEditUser = async (id) => {
-    await authFetch(`${API_URL}/users/${id}`, {
+    const res = await authFetch(`${API_URL}/users/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(editUserData)
     });
-    fetchUsers();
-    setEditingUserId(null);
-    alert("อัปเดตข้อมูลผู้ใช้งานเรียบร้อยแล้ว");
+    const data = await res.json();
+    if (data.success) {
+      fetchUsers();
+      setEditingUserId(null);
+      alert("อัปเดตข้อมูลผู้ใช้งานเรียบร้อยแล้ว");
+    } else {
+      alert(data.message);
+    }
   };
 
   const handleDeleteUser = async (id, targetName) => {
@@ -791,6 +846,7 @@ export default function SurinCourtWarrantApp() {
               <span className="text-[10px] text-yellow-300 block">{currentUser?.position} ({currentUser?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'})</span>
             </div>
           </div>
+          <button onClick={() => setShowPasswordChangeModal(true)} className="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white px-3 py-1.5 rounded-lg border border-amber-500/30 text-xs flex items-center gap-1.5 transition cursor-pointer"><KeyRound className="w-3.5 h-3.5" /> เปลี่ยนรหัสผ่าน</button>
           <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white px-3 py-1.5 rounded-lg border border-red-500/30 text-xs flex items-center gap-1.5 transition cursor-pointer"><LogOut className="w-3.5 h-3.5" /> ออกจากระบบ</button>
         </div>
       </div>
@@ -802,7 +858,7 @@ export default function SurinCourtWarrantApp() {
             <img src="/srnc-picture.png" alt="ตราศาล" className="w-12 h-12 object-contain drop-shadow" onError={(e) => e.target.src = "/srncpicture.png"} />
             <div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-yellow-400 flex items-center gap-2">ระบบบันทึกและติดตามการส่งหมายศาล</h1>
-              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> ระบบความปลอดภัย Token Authentication</span></p>
+              <p className="text-gray-300 text-sm mt-1 flex items-center gap-2">ศาลจังหวัดสุรินทร์ <span className="bg-emerald-800/80 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> ระดับความปลอดภัยสูง (Hardened Security)</span></p>
             </div>
           </div>
 
@@ -816,6 +872,50 @@ export default function SurinCourtWarrantApp() {
             )}
           </div>
         </div>
+
+        {/* Modal บังคับเปลี่ยนรหัสผ่าน */}
+        {showPasswordChangeModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 no-print">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border-2 border-amber-500 space-y-4">
+              <div className="flex items-center gap-3 border-b pb-3">
+                <div className="p-2.5 bg-amber-100 rounded-xl text-amber-800"><KeyRound className="w-6 h-6" /></div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">เปลี่ยนรหัสผ่านเพื่อความปลอดภัย</h3>
+                  <p className="text-xs text-gray-500">รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 8 ตัวอักษร</p>
+                </div>
+              </div>
+
+              {pwdChangeError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{pwdChangeError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePasswordSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">รหัสผ่านเดิม</label>
+                  <input type="password" required value={oldPasswordChange} onChange={e => setOldPasswordChange(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg" placeholder="รหัสผ่านเดิม" />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)</label>
+                  <input type="password" required value={newPasswordChange} onChange={e => setNewPasswordChange(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg" placeholder="ป้อนรหัสผ่านใหม่" />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">ยืนยันรหัสผ่านใหม่</label>
+                  <input type="password" required value={confirmPasswordChange} onChange={e => setConfirmPasswordChange(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg" placeholder="ยืนยันรหัสผ่านใหม่อีกครั้ง" />
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  {!currentUser?.mustChangePassword && (
+                    <button type="button" onClick={() => setShowPasswordChangeModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 font-bold py-2.5 rounded-xl cursor-pointer">ยกเลิก</button>
+                  )}
+                  <button type="submit" className="flex-1 bg-amber-800 hover:bg-amber-900 text-white font-bold py-2.5 rounded-xl cursor-pointer">ยืนยันเปลี่ยนรหัสผ่าน</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* TAB 1: ฟอร์มบันทึกหมาย */}
         {activeTab === 'warrantForm' && (
@@ -1070,7 +1170,7 @@ export default function SurinCourtWarrantApp() {
               <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-amber-200 pb-2"><UserPlus className="w-5 h-5 text-amber-800" /> เพิ่มผู้ใช้งานใหม่</h2>
               <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                 <div><label className="block font-bold mb-1">Username</label><input type="text" required value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs" /></div>
-                <div><label className="block font-bold mb-1">Password</label><input type="password" required value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs" /></div>
+                <div><label className="block font-bold mb-1">Password (อย่างน้อย 8 ตัวอักษร)</label><input type="password" required minLength={8} value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs" /></div>
                 <div><label className="block font-bold mb-1">ชื่อ - นามสกุล</label><input type="text" required value={newUser.fullName} onChange={e => setNewUser({...newUser, fullName: e.target.value})} className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs" /></div>
                 <div><label className="block font-bold mb-1">ตำแหน่ง</label><input type="text" required value={newUser.position} onChange={e => setNewUser({...newUser, position: e.target.value})} className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs" /></div>
                 <div><label className="block font-bold mb-1">สิทธิ์ (Role)</label><select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs cursor-pointer"><option value="user">ผู้ใช้งานทั่วไป</option><option value="admin">ผู้ดูแลระบบ</option></select></div>
@@ -1092,7 +1192,7 @@ export default function SurinCourtWarrantApp() {
                         <tr key={u.id} className={isEditing ? "bg-amber-50" : "hover:bg-gray-50"}>
                           <td className="p-3 font-semibold">{index + 1}</td>
                           <td className="p-3 font-mono font-bold text-amber-900">{isEditing ? <input type="text" value={editUserData.username} onChange={e => setEditUserData({...editUserData, username: e.target.value})} className="w-full p-1 border rounded text-xs" /> : u.username}</td>
-                          <td className="p-3 font-mono text-xs">{isEditing ? <input type="password" placeholder="ป้อนรหัสใหม่ถ้าต้องการเปลี่ยน" onChange={e => setEditUserData({...editUserData, password: e.target.value})} className="w-full p-1 border rounded text-xs" /> : <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">เข้ารหัสปลอดภัย</span>}</td>
+                          <td className="p-3 font-mono text-xs">{isEditing ? <input type="password" placeholder="ป้อนรหัสใหม่ (อย่างน้อย 8 ตัว)" onChange={e => setEditUserData({...editUserData, password: e.target.value})} className="w-full p-1 border rounded text-xs" /> : <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">เข้ารหัสปลอดภัย</span>}</td>
                           <td className="p-3 font-medium">{isEditing ? <input type="text" value={editUserData.fullName} onChange={e => setEditUserData({...editUserData, fullName: e.target.value})} className="w-full p-1 border rounded text-xs" /> : u.fullName}</td>
                           <td className="p-3">{isEditing ? <input type="text" value={editUserData.position} onChange={e => setEditUserData({...editUserData, position: e.target.value})} className="w-full p-1 border rounded text-xs" /> : u.position}</td>
                           <td className="p-3">{isEditing ? <select value={editUserData.role} onChange={e => setEditUserData({...editUserData, role: e.target.value})} className="p-1 border rounded text-xs"><option value="user">User</option><option value="admin">Admin</option></select> : <span className="px-2 py-0.5 rounded-full text-xs font-bold border bg-blue-100 text-blue-800">{u.role}</span>}</td>

@@ -11,8 +11,22 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
+// ดึงจาก Environment Variables ของ Render (หากไม่มีจะใช้ค่า fallback)
+const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 const JWT_SECRET = process.env.JWT_SECRET || 'srnc-court-warrant-secure-key-2026';
+
+// -------------------------------------------------------------
+// เสริมเกราะป้องกัน HTTP Security Headers (Built-in)
+// -------------------------------------------------------------
+app.disable('x-powered-by'); // ซ่อนเวอร์ชัน Express ป้องกันแฮกเกอร์สแกนหาช่องโหว่
+
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN'); // ป้องกัน Clickjacking
+  res.setHeader('X-Content-Type-Options', 'nosniff'); // ป้องกัน MIME sniffing
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
 
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
@@ -27,15 +41,14 @@ const db = createClient({
   authToken: dbAuthToken
 });
 
-// ฟังก์ชันเข้ารหัสรหัสผ่าน SHA-256
 function hashPassword(password) {
   return crypto.createHash('sha256').update(String(password)).digest('hex');
 }
 
 // -------------------------------------------------------------
-// ระบบความปลอดภัย: Rate Limiting ป้องกัน Brute Force
+// Rate Limiting (ป้องกัน Brute Force Login)
 // -------------------------------------------------------------
-const loginAttempts = new Map(); // IP -> { count, lockUntil }
+const loginAttempts = new Map();
 
 const rateLimiter = (req, res, next) => {
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
@@ -69,11 +82,11 @@ const clearFailedAttempt = (ip) => {
 };
 
 // -------------------------------------------------------------
-// ระบบความปลอดภัย: Token Generator & Middleware
+// Token Verification (อายุ 12 ชั่วโมง)
 // -------------------------------------------------------------
 function generateToken(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const exp = Date.now() + 24 * 60 * 60 * 1000; // อายุ 24 ชั่วโมง
+  const exp = Date.now() + 12 * 60 * 60 * 1000; // ปรับเหลือ 12 ชั่วโมง
   const data = Buffer.from(JSON.stringify({ ...payload, exp })).toString('base64url');
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${data}`).digest('base64url');
   return `${header}.${data}.${signature}`;
@@ -96,7 +109,6 @@ function verifyToken(token) {
   }
 }
 
-// Middleware ตรวจสอบว่าต้องมี Token จึงจะเข้าถึงข้อมูลได้
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -114,7 +126,6 @@ const authenticateToken = (req, res, next) => {
   next();
 };
 
-// Middleware เฉพาะ Admin
 const requireAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์เข้าถึงส่วนนี้' });
@@ -122,7 +133,6 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// Proxy ส่งข้อมูลไป Google Apps Script
 async function forwardToGoogleScript(payload) {
   try {
     const fetchFn = globalThis.fetch || (await import('node-fetch')).default;
@@ -138,7 +148,7 @@ async function forwardToGoogleScript(payload) {
   }
 }
 
-// สร้างโครงสร้างตารางข้อมูล
+// สร้างตารางข้อมูล
 const initDb = async () => {
   try {
     await db.execute(`
@@ -172,7 +182,8 @@ const initDb = async () => {
         password TEXT,
         fullName TEXT,
         position TEXT,
-        role TEXT
+        role TEXT,
+        requirePasswordChange INTEGER DEFAULT 0
       )
     `);
 
@@ -192,11 +203,11 @@ const initDb = async () => {
     const defaultHashedPassword = hashPassword(defaultPassword);
 
     await db.execute({
-      sql: `INSERT OR IGNORE INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: ['admin_default', 'tomsound', defaultHashedPassword, 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin']
+      sql: `INSERT OR IGNORE INTO users (id, username, password, fullName, position, role, requirePasswordChange) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: ['admin_default', 'tomsound', defaultHashedPassword, 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin', 1]
     });
 
-    console.log("Database initialized successfully with secure Node.js crypto");
+    console.log("Database initialized successfully with Hardened Security");
   } catch (err) {
     console.error("Database Init Error:", err);
   }
@@ -208,7 +219,6 @@ initDb();
 // Auth & Users API
 // -------------------------------------------------------------
 
-// เข้าสู่ระบบ พร้อม Rate Limiting ป้องกันการสุ่มรหัส
 app.post('/api/login', rateLimiter, async (req, res) => {
   const { username, password } = req.body;
   const cleanUsername = (username || '').trim();
@@ -238,12 +248,17 @@ app.post('/api/login', rateLimiter, async (req, res) => {
 
     if (isMatch) {
       clearFailedAttempt(clientIp);
+
+      // ตรวจสอบว่ายังเป็นรหัสผ่านเริ่มต้นหรือไม่ (123456)
+      const isDefaultPassword = (password === '123456') || (user.requirePasswordChange === 1);
+
       const safeUser = {
         id: user.id,
         username: user.username,
         fullName: user.fullName,
         position: user.position,
-        role: user.role
+        role: user.role,
+        mustChangePassword: isDefaultPassword
       };
       const token = generateToken(safeUser);
       res.json({ success: true, user: safeUser, token });
@@ -256,7 +271,42 @@ app.post('/api/login', rateLimiter, async (req, res) => {
   }
 });
 
-// ดึงรายชื่อผู้ใช้ (ต้องเป็น Admin เท่านั้น)
+// เปลี่ยนรหัสผ่านของตนเอง
+app.post('/api/change-password', authenticateToken, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ success: false, message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 8 ตัวอักษร' });
+  }
+
+  try {
+    const result = await db.execute({
+      sql: "SELECT password FROM users WHERE id = ?",
+      args: [req.user.id]
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้งาน' });
+    }
+
+    const currentHash = result.rows[0].password;
+    const oldHashed = hashPassword(oldPassword);
+
+    if (currentHash !== oldHashed && currentHash !== oldPassword) {
+      return res.status(400).json({ success: false, message: 'รหัสผ่านเดิมไม่ถูกต้อง' });
+    }
+
+    const newHashed = hashPassword(newPassword);
+    await db.execute({
+      sql: "UPDATE users SET password = ?, requirePasswordChange = 0 WHERE id = ?",
+      args: [newHashed, req.user.id]
+    });
+
+    res.json({ success: true, message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const result = await db.execute("SELECT id, username, fullName, position, role FROM users");
@@ -266,18 +316,20 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// เพิ่มผู้ใช้งาน (Admin เท่านั้น)
 app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   const { username, password, fullName, position, role } = req.body;
   if (!username || !password) {
     return res.status(400).json({ success: false, message: 'กรุณากรอก Username และ Password' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ success: false, message: 'รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร' });
   }
 
   const newId = `user_${Date.now()}`;
   try {
     const secureHashedPassword = hashPassword(password);
     await db.execute({
-      sql: `INSERT INTO users (id, username, password, fullName, position, role) VALUES (?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO users (id, username, password, fullName, position, role, requirePasswordChange) VALUES (?, ?, ?, ?, ?, ?, 0)`,
       args: [newId, (username || '').trim().toLowerCase(), secureHashedPassword, fullName, position, role || 'user']
     });
     res.json({ success: true });
@@ -286,11 +338,13 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// แก้ไขผู้ใช้งาน (Admin เท่านั้น)
 app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { username, password, fullName, position, role } = req.body;
   try {
     if (password && password.trim() !== '') {
+      if (password.length < 8) {
+        return res.status(400).json({ success: false, message: 'รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร' });
+      }
       const secureHashedPassword = hashPassword(password);
       await db.execute({
         sql: `UPDATE users SET username = ?, password = ?, fullName = ?, position = ?, role = ? WHERE id = ?`,
@@ -308,7 +362,6 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// ลบผู้ใช้งาน (Admin เท่านั้น)
 app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     await db.execute({
@@ -322,7 +375,7 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
 });
 
 // -------------------------------------------------------------
-// Warrants & Proxy API (ต้องมี Token ทุกคำขอ)
+// Warrants & Proxy API
 // -------------------------------------------------------------
 
 app.post('/api/sync-google-sheet', authenticateToken, async (req, res) => {
@@ -337,7 +390,6 @@ app.post('/api/sync-google-sheet', authenticateToken, async (req, res) => {
 app.get('/api/warrants/:username', authenticateToken, async (req, res) => {
   const cleanUsername = (req.params.username || '').trim().toLowerCase();
   
-  // ป้องกันการแอบดูงานของคนอื่น (ยกเว้นเป็น Admin)
   if (req.user.role !== 'admin' && req.user.username.toLowerCase() !== cleanUsername) {
     return res.status(403).json({ error: 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลของบัญชีอื่น' });
   }
@@ -419,7 +471,7 @@ app.delete('/api/warrants/:id', authenticateToken, async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// Audit Logs API (Admin เท่านั้น)
+// Audit Logs API
 // -------------------------------------------------------------
 
 app.get('/api/audit-logs', authenticateToken, requireAdmin, async (req, res) => {
@@ -461,5 +513,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Secure Server running on port ${PORT}`);
+  console.log(`Hardened Secure Server running on port ${PORT}`);
 });
