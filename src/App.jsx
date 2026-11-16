@@ -399,13 +399,12 @@ export default function SurinCourtWarrantApp() {
 
     if (newPhotos.length > 0) {
       setFormData((prev) => {
-        const matchedRec = currentRecords.find(r => r.id === prev.selectedRecordId);
-        const alreadySaved = Boolean(prev.isExistingSaved || matchedRec?.isSaved);
+        const hasOriginalDateTime = Boolean(prev.isExistingSaved || prev.originalSendDate);
         return {
           ...prev,
           photos: [...prev.photos, ...newPhotos],
-          sendDate: alreadySaved ? prev.sendDate : uploadDateStr,
-          sendTime: alreadySaved ? prev.sendTime : uploadTimeStr
+          sendDate: hasOriginalDateTime ? (prev.sendDate || prev.originalSendDate) : uploadDateStr,
+          sendTime: hasOriginalDateTime ? (prev.sendTime || prev.originalSendTime) : uploadTimeStr
         };
       });
     }
@@ -522,7 +521,9 @@ export default function SurinCourtWarrantApp() {
       price: item.price || '0.00',
       gps: item.gps || '',
       photos: item.photos || [],
-      isExistingSaved: Boolean(item.isSaved)
+      isExistingSaved: Boolean(item.isSaved || (item.sendDate && item.sendTime)),
+      originalSendDate: item.sendDate || '',
+      originalSendTime: item.sendTime || ''
     });
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
@@ -534,7 +535,7 @@ export default function SurinCourtWarrantApp() {
     if (!formData.selectedRecordId) return alert("กรุณากดปุ่ม 'เลือกนำเข้า' หรือ 'กรอกข้อมูลเอง' ก่อนครับ");
 
     const activeUsername = currentUser.username.trim().toLowerCase();
-    const { isExistingSaved, ...cleanFormData } = formData;
+    const { isExistingSaved, originalSendDate, originalSendTime, ...cleanFormData } = formData;
     const updatedRecord = {
       ...cleanFormData,
       id: formData.selectedRecordId,
