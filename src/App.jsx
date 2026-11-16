@@ -197,8 +197,8 @@ export default function SurinCourtWarrantApp() {
           isSaved: Boolean(item.isSaved === true || item.isSaved === 1 || item.isSaved === "1") 
         }));
         const mergedList = Array.from(mergedMap.values());
-        setCurrentRecords(mergedList);
-        saveLocalBackup(cleanUser, mergedList);
+        const ownOnly = mergedList.filter(item => !item.ownerUsername || String(item.ownerUsername).trim().toLowerCase() === cleanUser); setCurrentRecords(ownOnly);
+        saveLocalBackup(cleanUser, ownOnly);
       }
     } catch (e) {}
   };
@@ -594,7 +594,7 @@ export default function SurinCourtWarrantApp() {
       const data = await res.json();
       if (data.success) {
         setIsLoggedIn(true);
-        setCurrentUser(data.user);
+        setCurrentRecords([]); setCurrentUser(data.user);
         localStorage.setItem('srnc_court_user', JSON.stringify(data.user));
         localStorage.setItem('srnc_auth_token', data.token);
         setLoginError('');
@@ -660,7 +660,7 @@ export default function SurinCourtWarrantApp() {
     localStorage.removeItem('srnc_court_user');
     localStorage.removeItem('srnc_auth_token');
     setIsLoggedIn(false);
-    setCurrentUser(null);
+    setCurrentRecords([]); setCurrentUser(null);
   };
 
   const handleCreateUser = async (e) => {
