@@ -389,23 +389,41 @@ app.post('/api/sync-google-sheet', authenticateToken, async (req, res) => {
 
 app.get('/api/warrants/:username', authenticateToken, async (req, res) => {
   const cleanUsername = (req.params.username || '').trim().toLowerCase();
-  
+
   if (req.user.role !== 'admin' && req.user.username.toLowerCase() !== cleanUsername) {
     return res.status(403).json({ error: 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลของบัญชีอื่น' });
   }
 
   try {
     const result = await db.execute({
-      sql: "SELECT * FROM warrants WHERE LOWER(ownerUsername) = LOWER(?) ORDER BY id DESC",
+      sql: 'SELECT * FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? ORDER BY rowid DESC LIMIT 200',
       args: [cleanUsername]
     });
-    const records = result.rows.map(row => ({
-      ...row,
-      photos: row.photos ? JSON.parse(row.photos) : []
-    }));
-    res.json(records);
+
+    const rows = (result.rows || []).map((row, idx) => {
+      let photos = [];
+      if (row.photos) {
+        try {
+          const parsed = typeof row.photos === 'string' ? JSON.parse(row.photos) : row.photos;
+          if (Array.isArray(parsed)) {
+            // เก็บเฉพาะ URL หรือรูป Base64 ของ 15 รายการล่าสุด เพื่อป้องกัน Payload ใหญ่เกิน 502 Bad Gateway
+            photos = idx < 15 ? parsed : parsed.filter(p => typeof p === 'string' && p.startsWith('http'));
+          }
+        } catch (e) {
+          photos = [];
+        }
+      }
+      return {
+        ...row,
+        photos,
+        isSaved: Number(row.isSaved) === 1 || row.isSaved === true || row.isSaved === '1'
+      };
+    });
+
+    res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Fetch Warrants Error:", err);
+    res.json([]);
   }
 });
 
