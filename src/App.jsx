@@ -197,7 +197,7 @@ export default function SurinCourtWarrantApp() {
           isSaved: Boolean(item.isSaved === true || item.isSaved === 1 || item.isSaved === "1") 
         }));
         const mergedList = Array.from(mergedMap.values());
-        const ownOnly = mergedList.filter(item => !item.ownerUsername || String(item.ownerUsername).trim().toLowerCase() === cleanUser); setCurrentRecords(ownOnly);
+        const ownOnly = mergedList.filter(item => !item.ownerUsername || String(item.ownerUsername).trim().toLowerCase() === cleanUser || String(item.id || "").toLowerCase().includes(`_${cleanUser}_`)); setCurrentRecords(ownOnly);
         saveLocalBackup(cleanUser, ownOnly);
       }
     } catch (e) {}
