@@ -198,7 +198,7 @@ const initDb = async () => {
       args: ['admin_default', 'tomsound', defaultHashedPassword, 'นายจิรพงษ์ มณีปรุ', 'เจ้าพนักงานเดินหมาย', 'admin']
     });
 
-    await db.execute("UPDATE warrants SET photos = '[]' WHERE LENGTH(photos) > 100000").catch(() => {}); console.log("Database initialized and oversized Base64 cleaned");
+    console.log("Database initialized successfully without schema conflicts");
   } catch (err) {
     console.error("Database Init Error:", err);
   }
