@@ -158,7 +158,8 @@ export default function SurinCourtWarrantApp() {
     warrantType: '', targetName: '', 
     sendDate: todayStr, 
     sendTime: getCurrentTimeStr(),
-    address: '', subdistrict: '', district: '', province: 'สุรินทร์', zipcode: '32000', warrantResult: 'ส่งได้โดยวิธีปิดหมาย', price: '', gps: '', photos: []
+    address: '', subdistrict: '', district: '', province: 'สุรินทร์', zipcode: '32000', warrantResult: 'ส่งได้โดยวิธีปิดหมาย', price: '', gps: '', photos: [],
+    isExistingSaved: false
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -186,21 +187,57 @@ export default function SurinCourtWarrantApp() {
     const backup = loadLocalBackup(cleanUser);
     if (backup.length > 0) setCurrentRecords(backup);
 
+    const mergedMap = new Map();
+    backup.forEach(item => mergedMap.set(item.id, item));
+
+    // 1. ดึงจาก Google Sheets (มีลิงก์รูปภาพและข้อมูลทั้งหมดของ bank/tomsound)
+    try {
+      const resGS = await authFetch(`${API_URL}/warrants-gs/${encodeURIComponent(cleanUser)}`);
+      if (resGS.ok) {
+        const gsData = await resGS.json();
+        const gsList = Array.isArray(gsData) ? gsData : (Array.isArray(gsData?.data) ? gsData.data : []);
+        gsList.forEach(item => {
+          const itemId = item.id || `gs_${item.blackNo}_${cleanUser}`;
+          mergedMap.set(itemId, {
+            ...item,
+            id: itemId,
+            photos: Array.isArray(item.photos) ? item.photos : [],
+            isSaved: true
+          });
+        });
+      }
+    } catch (e) {}
+
+    // 2. ดึงจาก Backend Turso มารวมด้วย
     try {
       const resBackend = await authFetch(`${API_URL}/warrants/${encodeURIComponent(cleanUser)}`);
       if (resBackend.ok) {
         const backendWarrants = await resBackend.json();
-        const mergedMap = new Map();
-        backup.forEach(item => mergedMap.set(item.id, item));
-        backendWarrants.forEach(item => mergedMap.set(item.id, { 
-          ...item, 
-          isSaved: Boolean(item.isSaved === true || item.isSaved === 1 || item.isSaved === "1") 
-        }));
-        const mergedList = Array.from(mergedMap.values());
-        const ownOnly = mergedList.filter(item => !item.ownerUsername || String(item.ownerUsername).trim().toLowerCase() === cleanUser || String(item.id || "").toLowerCase().includes(`_${cleanUser}_`)); setCurrentRecords(ownOnly);
-        saveLocalBackup(cleanUser, ownOnly);
+        backendWarrants.forEach(item => {
+          const existing = mergedMap.get(item.id);
+          const itemPhotos = (Array.isArray(item.photos) && item.photos.length > 0)
+            ? item.photos
+            : (existing?.photos || []);
+          mergedMap.set(item.id, {
+            ...(existing || {}),
+            ...item,
+            photos: itemPhotos,
+            isSaved: Boolean(item.isSaved === true || item.isSaved === 1 || item.isSaved === "1" || existing?.isSaved)
+          });
+        });
       }
     } catch (e) {}
+
+    const mergedList = Array.from(mergedMap.values());
+    const ownOnly = mergedList.filter(item =>
+      !item.ownerUsername ||
+      String(item.ownerUsername).trim().toLowerCase() === cleanUser ||
+      String(item.id || "").toLowerCase().includes(`_${cleanUser}_`)
+    );
+    if (ownOnly.length > 0) {
+      setCurrentRecords(ownOnly);
+      saveLocalBackup(cleanUser, ownOnly);
+    }
   };
 
   const syncBatchToBackend = async (records) => {
@@ -263,7 +300,8 @@ export default function SurinCourtWarrantApp() {
       ...initialFormState,
       selectedRecordId: `manual_${currentUser?.username || 'user'}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       sendDate: todayStr,
-      sendTime: getCurrentTimeStr()
+      sendTime: getCurrentTimeStr(),
+      isExistingSaved: false
     });
     addAuditLog('MANUAL_INPUT_START', 'เปิดฟอร์มสำหรับกรอกข้อมูลด้วยตัวเอง');
   };
@@ -282,45 +320,69 @@ export default function SurinCourtWarrantApp() {
     return dateString;
   };
 
-  const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) => {
-    return new Promise((resolve) => {
-      if (!file) return resolve('');
-      const reader = new FileReader();
-      reader.onerror = () => resolve('');
-      reader.onload = (event) => {
-        const img = new window.Image();
-        img.onerror = () => resolve('');
-        img.onload = () => {
-          try {
-            let width = img.width;
-            let height = img.height;
-            if (width > height) {
-              if (width > maxWidth) {
-                height = Math.round((height * maxWidth) / width);
-                width = maxWidth;
-              }
-            } else {
-              if (height > maxHeight) {
-                width = Math.round((width * maxHeight) / height);
-                height = maxHeight;
-              }
-            }
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', quality));
-          } catch (err) {
-            resolve(event.target.result);
-          }
-        };
-        img.src = event.target.result;
+  // บีบอัดภาพความละเอียดสูงแบบล็อกอัตราส่วนภาพ 100% (ไม่ยืด ไม่เสียสมดุล และขนาดไฟล์เล็กไม่ทำให้ Server ล่ม)
+  const compressImage = async (file, maxDimension = 850, quality = 0.72) => {
+    if (!file) return '';
+    const calcProportionalSize = (origW, origH) => {
+      if (!origW || !origH) return { width: maxDimension, height: maxDimension };
+      const ratio = Math.min(maxDimension / origW, maxDimension / origH, 1);
+      return {
+        width: Math.round(origW * ratio),
+        height: Math.round(origH * ratio)
       };
-      reader.readAsDataURL(file);
+    };
+
+    try {
+      if (typeof window.createImageBitmap === 'function') {
+        const bitmap = await window.createImageBitmap(file);
+        const { width, height } = calcProportionalSize(bitmap.width, bitmap.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        if (bitmap.close) bitmap.close();
+        return canvas.toDataURL('image/jpeg', quality);
+      }
+    } catch (e) {}
+
+    return new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new window.Image();
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve('');
+      };
+      img.onload = () => {
+        try {
+          const { width, height } = calcProportionalSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          URL.revokeObjectURL(objectUrl);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch (err) {
+          URL.revokeObjectURL(objectUrl);
+          resolve('');
+        }
+      };
+      img.src = objectUrl;
     });
   };
 
+  // เงื่อนไขสำคัญ:
+  // 1. หากเป็นการแก้ไขรายการที่เคยบันทึกไปแล้ว (isExistingSaved === true) -> คงวันที่และเวลาเดิมไว้ 100%
+  // 2. หากเป็นการบันทึกข้อมูลใหม่ (isExistingSaved === false) -> อัปเดตวันที่และเวลาเป็นปัจจุบัน
   const handleImageChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -336,13 +398,18 @@ export default function SurinCourtWarrantApp() {
     }
 
     if (newPhotos.length > 0) {
-      setFormData((prev) => ({
-        ...prev,
-        photos: [...prev.photos, ...newPhotos],
-        sendDate: uploadDateStr,
-        sendTime: uploadTimeStr
-      }));
+      setFormData((prev) => {
+        const matchedRec = currentRecords.find(r => r.id === prev.selectedRecordId);
+        const alreadySaved = Boolean(prev.isExistingSaved || matchedRec?.isSaved);
+        return {
+          ...prev,
+          photos: [...prev.photos, ...newPhotos],
+          sendDate: alreadySaved ? prev.sendDate : uploadDateStr,
+          sendTime: alreadySaved ? prev.sendTime : uploadTimeStr
+        };
+      });
     }
+    e.target.value = '';
   };
 
   const handleRemovePhoto = (indexToRemove) => {
@@ -454,7 +521,8 @@ export default function SurinCourtWarrantApp() {
       warrantResult: item.warrantResult || 'ส่งได้โดยวิธีปิดหมาย',
       price: item.price || '0.00',
       gps: item.gps || '',
-      photos: item.photos || []
+      photos: item.photos || [],
+      isExistingSaved: Boolean(item.isSaved)
     });
     addAuditLog('SELECT_CASE', `เลือกจำเลย: ${item.targetName}, (คดีดำ: ${item.blackNo || '-'})`);
   };
@@ -463,20 +531,23 @@ export default function SurinCourtWarrantApp() {
     e.preventDefault();
     if (!currentUser) return;
     if (!formData.blackNo && !formData.targetName) return alert("กรุณากรอกเลขดำหรือชื่อผู้รับหมายก่อนกดบันทึก");
-    if (!formData.selectedRecordId) return alert("กรุณากดปุ่ม 'เลือกนำเข้า' ของจำเลยที่ต้องการทำรายงานก่อนครับ");
+    if (!formData.selectedRecordId) return alert("กรุณากดปุ่ม 'เลือกนำเข้า' หรือ 'กรอกข้อมูลเอง' ก่อนครับ");
 
     const activeUsername = currentUser.username.trim().toLowerCase();
+    const { isExistingSaved, ...cleanFormData } = formData;
     const updatedRecord = {
-      ...formData,
+      ...cleanFormData,
       id: formData.selectedRecordId,
       ownerUsername: activeUsername,
       isSaved: true
     };
 
-    const updatedList = currentRecords.map(rec => 
-      rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec
-    );
+    const existsInList = currentRecords.some(rec => rec.id === formData.selectedRecordId);
+    const updatedList = existsInList
+      ? currentRecords.map(rec => rec.id === formData.selectedRecordId ? { ...rec, ...updatedRecord, isSaved: true } : rec)
+      : [...currentRecords, updatedRecord];
     
+    setFormData(prev => ({ ...prev, isExistingSaved: true }));
     setCurrentRecords(updatedList);
     saveLocalBackup(activeUsername, updatedList);
 
@@ -547,7 +618,7 @@ export default function SurinCourtWarrantApp() {
         <div>เขียนที่ บ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span></div>
         <div>วันที่ <span class="underline-dot">${formatThaiDate(formData.sendDate)}</span></div>
         <br/>
-        <div>วันนี้เวลาประมาณ <span class="underline-dot">${formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span class="underline-dot">${formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span class="underline-dot">${formData.targetName || "...................................."}</span> เมื่อมาถึงบ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
+        <div>วันนี้เวลาประมาณ <span class="underline-dot">${formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span class="underline-dot">${formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span class="underline-dot">${formData.targetName || "...................................."}</span> เมื่อถึงบ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span> ซึ่งเป็นบ้านของจำเลย</div>
         <br/>
         <div>ข้าพเจ้าได้ทำการปิด หมาย ไว้ ณ ภูมิลำเนาของ <span class="underline-dot">${formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
         <br/>
@@ -615,7 +686,7 @@ export default function SurinCourtWarrantApp() {
     }
   };
 
- const handleChangePasswordSubmit = async (e) => {
+  const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
     setPwdChangeError('');
 
@@ -738,8 +809,8 @@ export default function SurinCourtWarrantApp() {
     const archive = {};
     const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
     currentRecords.forEach(rec => {
-      const dateStr = rec.sendDate || todayStr;
-      const parts = String(dateStr).split('-');
+      const rawDate = String((rec.sendDate && String(rec.sendDate).trim()) ? rec.sendDate : todayStr).split('T')[0].trim();
+      const parts = rawDate.split('-');
       if (parts.length === 3) {
         let rawYear = parseInt(parts[0], 10);
         if (isNaN(rawYear)) return;
@@ -928,7 +999,7 @@ export default function SurinCourtWarrantApp() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-amber-200">
                 <div className="flex items-center gap-2 font-bold text-amber-900 text-base"><FileSpreadsheet className="w-5 h-5 text-amber-800" /><span>จัดการข้อมูลหมายคดี - บัญชี {currentUser?.fullName} ({currentUser?.username})</span></div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => { setShowArchiveModal(true); setSelectedYear(null); setSelectedMonth(null); setSelectedDate(null); }} className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"><Folder className="w-4 h-4" /> คลังโฟลเดอร์ย้อนหลัง</button>
+                  <button type="button" onClick={() => { if (currentUser?.username) fetchUserWarrants(currentUser.username); setShowArchiveModal(true); setSelectedYear(null); setSelectedMonth(null); setSelectedDate(null); }} className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"><Folder className="w-4 h-4" /> คลังโฟลเดอร์ย้อนหลัง</button>
                   <button type="button" onClick={handleClearFormForManualInput} className="bg-sky-700 hover:bg-sky-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition cursor-pointer"><FilePlus className="w-4 h-4" /> กรอกข้อมูลเอง (ล้างฟอร์มใหม่)</button>
                   <label className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer transition"><Upload className="w-4 h-4" /> เลือกไฟล์ Excel บัญชีหมายศาล<input type="file" accept=".xls,.xlsx" onChange={handleFileUpload} className="hidden" /></label>
                 </div>
