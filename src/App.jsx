@@ -823,6 +823,7 @@ export default function SurinCourtWarrantApp() {
         .sarabun-font { font-family: 'TH SarabunPSK', 'TH Sarabun New', 'Sarabun', sans-serif !important; font-size: 16px !important; line-height: 1.25 !important; }
         .sarabun-font * { font-size: 16px !important; }
         .dot-underline { border-bottom: 1px dotted #000; display: inline-block; padding: 0 4px; }
+        select, input, textarea { max-width: 100%; box-sizing: border-box; }
         @media print {
           @page { size: A4 portrait; margin: 0.8cm 1.2cm 0.6cm 1.2cm !important; }
           html, body { height: auto !important; overflow: visible !important; background-color: white !important; margin: 0 !important; padding: 0 !important; }
