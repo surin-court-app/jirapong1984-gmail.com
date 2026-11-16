@@ -512,6 +512,15 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
+app.post('/api/warrants/cleanup-heavy', authenticateToken, async (req, res) => {
+  try {
+    await db.execute("UPDATE warrants SET photos = '[]' WHERE LENGTH(photos) > 150000");
+    res.json({ success: true, message: 'Cleaned oversized Base64 records' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Hardened Secure Server running on port ${PORT}`);
 });
