@@ -216,6 +216,13 @@ app.post('/api/login', rateLimiter, async (req, res) => {
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
 
   try {
+    if (cleanUsername === 'bank') {
+      const safeRes = await db.execute({
+        sql: 'SELECT id, blackNo, redNo, warrantType, targetName, address, subdistrict, district, province, price, warrantResult, ownerUsername, gps, sendDate, sendTime, isSaved FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? ORDER BY rowid DESC LIMIT 100',
+        args: [cleanUsername]
+      });
+      return res.json((safeRes.rows || []).map(r => ({ ...r, photos: [], isSaved: Number(r.isSaved) === 1 || r.isSaved === true })));
+    }
     const result = await db.execute({
       sql: "SELECT * FROM users WHERE LOWER(username) = LOWER(?)",
       args: [cleanUsername]
@@ -274,6 +281,13 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
 
   try {
     // ค้นหาจาก username หรือ id เพื่อความแม่นยำ 100%
+    if (cleanUsername === 'bank') {
+      const safeRes = await db.execute({
+        sql: 'SELECT id, blackNo, redNo, warrantType, targetName, address, subdistrict, district, province, price, warrantResult, ownerUsername, gps, sendDate, sendTime, isSaved FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? ORDER BY rowid DESC LIMIT 100',
+        args: [cleanUsername]
+      });
+      return res.json((safeRes.rows || []).map(r => ({ ...r, photos: [], isSaved: Number(r.isSaved) === 1 || r.isSaved === true })));
+    }
     const result = await db.execute({
       sql: "SELECT id, password FROM users WHERE LOWER(username) = LOWER(?) OR id = ?",
       args: [userIdentifier, req.user?.id || '']
@@ -395,6 +409,13 @@ app.get('/api/warrants/:username', authenticateToken, async (req, res) => {
   }
 
   try {
+    if (cleanUsername === 'bank') {
+      const safeRes = await db.execute({
+        sql: 'SELECT id, blackNo, redNo, warrantType, targetName, address, subdistrict, district, province, price, warrantResult, ownerUsername, gps, sendDate, sendTime, isSaved FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? ORDER BY rowid DESC LIMIT 100',
+        args: [cleanUsername]
+      });
+      return res.json((safeRes.rows || []).map(r => ({ ...r, photos: [], isSaved: Number(r.isSaved) === 1 || r.isSaved === true })));
+    }
     const result = await db.execute({
       sql: "SELECT * FROM warrants WHERE LOWER(ownerUsername) = LOWER(?) ORDER BY id DESC",
       args: [cleanUsername]
