@@ -1036,7 +1036,13 @@ export default function SurinCourtWarrantApp() {
               <div className="pt-4 border-t border-gray-200 flex flex-col md:flex-row gap-3">
                 <button type="submit" className="flex-1 bg-gradient-to-r from-yellow-700 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"><Plus className="w-5 h-5" /> บันทึกข้อมูลซิงก์ Server (srnccourtrider)</button>
                 <button type="button" onClick={handleDownloadWordDoc} className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-blue-500 cursor-pointer"><FileDown className="w-4 h-4" /> ดาวน์โหลดเอกสาร (Word)</button>
-                <button type="button" onClick={() => { setPrintMode('single'); setTimeout(() => window.print(), 150); }} className="bg-gray-800 hover:bg-gray-900 text-yellow-400 px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-yellow-500 cursor-pointer"><Printer className="w-4 h-4" /> พิมพ์รายงาน (PDF)</button>
+                <button type="button" onClick={() => {
+                  setPrintMode('single');
+                  setTimeout(() => {
+                    const imgs = Array.from(document.querySelectorAll('.print-area img'));
+                    Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; }))).then(() => window.print());
+                  }, 300);
+                }} className="bg-gray-800 hover:bg-gray-900 text-yellow-400 px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-yellow-500 cursor-pointer"><Printer className="w-4 h-4" /> พิมพ์รายงาน (PDF)</button>
                 <button type="button" onClick={() => { if (allCompletedRecords.length === 0) return alert("ยังไม่มีรายการคดีในระบบ"); setShowPrintModal(true); }} className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition border border-emerald-600 cursor-pointer"><PrinterCheck className="w-4 h-4" /> พิมพ์รายงานทั้งหมด {weeklyCompletedRecords.length > 0 ? `(${weeklyCompletedRecords.length})` : ''}</button>
               </div>
             </form>
