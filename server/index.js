@@ -12,6 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
+const SCRIPT_API_KEY = process.env.SCRIPT_API_KEY || 'SRNC_COURT_SECRET_2026_99X';
 const JWT_SECRET = process.env.JWT_SECRET || 'srnc-court-warrant-secure-key-2026';
 
 app.disable('x-powered-by');
@@ -127,12 +128,18 @@ const requireAdmin = (req, res, next) => {
 async function forwardToGoogleScript(payload) {
   try {
     const fetchFn = globalThis.fetch || (await import('node-fetch')).default;
+    const securePayload = {
+      ...payload,
+      apiKey: SCRIPT_API_KEY
+    };
     const response = await fetchFn(GOOGLE_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(securePayload)
     });
-    return response.ok;
+    if (!response.ok) return false;
+    const result = await response.json().catch(() => ({ status: 'success' }));
+    return result.status !== 'error';
   } catch (err) {
     console.error("Backend forwardToGoogleScript Error:", err);
     return false;
@@ -216,13 +223,6 @@ app.post('/api/login', rateLimiter, async (req, res) => {
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
 
   try {
-    if (cleanUsername === 'bank') {
-      const safeRes = await db.execute({
-        sql: 'SELECT id, blackNo, redNo, warrantType, targetName, address, subdistrict, district, province, price, warrantResult, ownerUsername, gps, sendDate, sendTime, isSaved FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? ORDER BY rowid DESC LIMIT 100',
-        args: [cleanUsername]
-      });
-      return res.json((safeRes.rows || []).map(r => ({ ...r, photos: [], isSaved: Number(r.isSaved) === 1 || r.isSaved === true })));
-    }
     const result = await db.execute({
       sql: "SELECT * FROM users WHERE LOWER(username) = LOWER(?)",
       args: [cleanUsername]
@@ -280,14 +280,6 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
   const userIdentifier = req.user?.username ? req.user.username.trim().toLowerCase() : '';
 
   try {
-    // ค้นหาจาก username หรือ id เพื่อความแม่นยำ 100%
-    if (cleanUsername === 'bank') {
-      const safeRes = await db.execute({
-        sql: 'SELECT id, blackNo, redNo, warrantType, targetName, address, subdistrict, district, province, price, warrantResult, ownerUsername, gps, sendDate, sendTime, isSaved FROM warrants WHERE LOWER(TRIM(ownerUsername)) = ? ORDER BY rowid DESC LIMIT 100',
-        args: [cleanUsername]
-      });
-      return res.json((safeRes.rows || []).map(r => ({ ...r, photos: [], isSaved: Number(r.isSaved) === 1 || r.isSaved === true })));
-    }
     const result = await db.execute({
       sql: "SELECT id, password FROM users WHERE LOWER(username) = LOWER(?) OR id = ?",
       args: [userIdentifier, req.user?.id || '']
@@ -391,6 +383,23 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
 // -------------------------------------------------------------
 // Warrants & Proxy API
 // -------------------------------------------------------------
+
+app.get('/api/sync-google-sheet', authenticateToken, async (req, res) => {
+  const cleanUsername = (req.query.username || req.user.username || '').trim().toLowerCase();
+  if (req.user.role !== 'admin' && req.user.username.toLowerCase() !== cleanUsername) {
+    return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลของบัญชีอื่น' });
+  }
+
+  try {
+    const fetchFn = globalThis.fetch || (await import('node-fetch')).default;
+    const targetUrl = `${GOOGLE_SCRIPT_URL}?username=${encodeURIComponent(cleanUsername)}&apiKey=${encodeURIComponent(SCRIPT_API_KEY)}`;
+    const response = await fetchFn(targetUrl);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 app.post('/api/sync-google-sheet', authenticateToken, async (req, res) => {
   try {
