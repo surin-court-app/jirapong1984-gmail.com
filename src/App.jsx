@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download, KeyRound } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 นาที
 
 const getAuthToken = () => localStorage.getItem('srnc_auth_token') || '';
 
@@ -10,7 +11,11 @@ const authFetch = async (url, options = {}) => {
     ...options.headers,
     'Authorization': `Bearer ${getAuthToken()}`
   };
-  return fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 || res.status === 403) {
+    window.dispatchEvent(new Event('srnc-session-expired'));
+  }
+  return res;
 };
 
 const sendToGoogleScript = async (payload) => {
@@ -114,6 +119,8 @@ export default function SurinCourtWarrantApp() {
 
   const [excelFilterStatus, setExcelFilterStatus] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const idleTimerRef = useRef(null);
 
   const loadLocalBackup = (username) => {
     if (!username) return [];
@@ -259,6 +266,75 @@ export default function SurinCourtWarrantApp() {
     } catch (e) {}
   };
 
+  const addAuditLog = async (action, details, userObj = currentUser) => {
+    const newLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      timestamp: new Date().toLocaleString('th-TH'),
+      username: userObj ? userObj.username : 'Unknown',
+      fullName: userObj ? userObj.fullName : 'ไม่ระบุตัวตน',
+      action, details
+    };
+    try {
+      await authFetch(`${API_URL}/audit-logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLog)
+      });
+      if (currentUser?.role === 'admin') fetchAuditLogs();
+    } catch (e) {}
+  };
+
+  const performAutoLogout = useCallback((reasonMsg = 'หมดเวลาการใช้งาน (ไม่ได้ใช้งานเกิน 30 นาที) กรุณาเข้าสู่ระบบใหม่อีกครั้ง') => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+    const savedUserRaw = localStorage.getItem('srnc_court_user');
+    if (savedUserRaw && localStorage.getItem('srnc_auth_token')) {
+      try {
+        const parsedUser = JSON.parse(savedUserRaw);
+        addAuditLog('AUTO_LOGOUT', 'ออกจากระบบอัตโนมัติเนื่องจากไม่ใช้งานครบ 30 นาที', parsedUser);
+      } catch (e) {}
+    }
+    localStorage.removeItem('srnc_court_user');
+    localStorage.removeItem('srnc_auth_token');
+    setIsLoggedIn(false);
+    setCurrentRecords([]);
+    setCurrentUser(null);
+    setShowPasswordChangeModal(false);
+    setShowArchiveModal(false);
+    setShowPrintModal(false);
+    setLoginError(reasonMsg);
+  }, []);
+
+  // ระบบตรวจจับการใช้งานและตัดออกจากระบบอัตโนมัติเมื่อครบ 30 นาที
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const resetIdleTimer = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        performAutoLogout();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const handleSessionExpired = () => {
+      performAutoLogout('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((evt) => window.addEventListener(evt, resetIdleTimer, { passive: true }));
+    window.addEventListener('srnc-session-expired', handleSessionExpired);
+
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, resetIdleTimer));
+      window.removeEventListener('srnc-session-expired', handleSessionExpired);
+    };
+  }, [isLoggedIn, performAutoLogout]);
+
   useEffect(() => {
     if (isLoggedIn) {
       if (currentUser?.mustChangePassword) {
@@ -279,24 +355,6 @@ export default function SurinCourtWarrantApp() {
       fetchAuditLogs();
     }
   }, [activeTab]);
-
-  const addAuditLog = async (action, details, userObj = currentUser) => {
-    const newLog = {
-      id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      timestamp: new Date().toLocaleString('th-TH'),
-      username: userObj ? userObj.username : 'Unknown',
-      fullName: userObj ? userObj.fullName : 'ไม่ระบุตัวตน',
-      action, details
-    };
-    try {
-      await authFetch(`${API_URL}/audit-logs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newLog)
-      });
-      if (currentUser?.role === 'admin') fetchAuditLogs();
-    } catch (e) {}
-  };
 
   const handleClearFormForManualInput = () => {
     const newManualBatchId = `manual_${Date.now()}`;
@@ -741,6 +799,7 @@ export default function SurinCourtWarrantApp() {
   };
 
   const handleLogout = () => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (currentUser) addAuditLog('LOGOUT', 'ออกจากระบบ');
     localStorage.removeItem('srnc_court_user');
     localStorage.removeItem('srnc_auth_token');
