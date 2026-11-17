@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycby29-gTlv7mAORr0RBPDVpui3wmP7PlVk1x-U2aNz2UW4F68T0uJFG9qTMTQe4SEgAE/exec';
 const SCRIPT_API_KEY = process.env.SCRIPT_API_KEY || 'SRNC_COURT_SECRET_2026_99X';
@@ -196,7 +196,6 @@ const initDb = async () => {
       )
     `);
 
-    // ตรวจสอบและเพิ่ม Admin เริ่มต้นโดยใช้เฉพาะคอลัมน์มาตรฐาน
     const defaultPassword = '123456';
     const defaultHashedPassword = hashPassword(defaultPassword);
 
@@ -211,7 +210,10 @@ const initDb = async () => {
   }
 };
 
-initDb();
+// Health Check Endpoint สำหรับ Render
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', port: PORT });
+});
 
 // -------------------------------------------------------------
 // Auth & Users API
@@ -246,8 +248,6 @@ app.post('/api/login', rateLimiter, async (req, res) => {
 
     if (isMatch) {
       clearFailedAttempt(clientIp);
-
-      // หากรหัสผ่านที่ส่งมายังเป็น 123456 จะแจ้งเตือนให้เปลี่ยนรหัสทันที
       const isDefaultPassword = (password === '123456');
 
       const safeUser = {
@@ -292,8 +292,6 @@ app.post('/api/change-password', authenticateToken, async (req, res) => {
     const user = result.rows[0];
     const currentHash = String(user.password || '');
     const oldHashed = hashPassword(cleanOld);
-
-    // ตรวจสอบทั้งกรณีที่ในฐานข้อมูลเป็น SHA-256 หรือเป็น Plain text เดิม
     const isMatch = (currentHash === oldHashed) || (currentHash === cleanOld);
 
     if (!isMatch) {
@@ -544,4 +542,5 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Hardened Secure Server running on port ${PORT}`);
+  initDb();
 });
