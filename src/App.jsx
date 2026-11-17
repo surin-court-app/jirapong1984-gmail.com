@@ -4,6 +4,85 @@ import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 นาที
 
+const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+// คอมโพเนนต์ตัวเลือกวันที่แบบ วัน / เดือนไทย / ปี พ.ศ. (เก็บค่าเป็น YYYY-MM-DD มาตรฐาน)
+const ThaiBuddhistDateInput = ({ value, onChange, className = "" }) => {
+  const today = new Date();
+  let curYearCE = today.getFullYear();
+  let curMonth = today.getMonth() + 1;
+  let curDay = today.getDate();
+
+  if (value && String(value).includes('-')) {
+    const parts = String(value).split('T')[0].split('-');
+    if (parts.length === 3) {
+      let y = parseInt(parts[0], 10);
+      if (y > 2400) y -= 543;
+      if (!isNaN(y)) curYearCE = y;
+      const m = parseInt(parts[1], 10);
+      if (!isNaN(m) && m >= 1 && m <= 12) curMonth = m;
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(d) && d >= 1 && d <= 31) curDay = d;
+    }
+  }
+
+  const curYearBE = curYearCE + 543;
+  const daysInMonth = new Date(curYearCE, curMonth, 0).getDate();
+
+  const updateDate = (newYearBE, newMonth, newDay) => {
+    const ceYear = newYearBE - 543;
+    const maxDay = new Date(ceYear, newMonth, 0).getDate();
+    const safeDay = Math.min(newDay, maxDay);
+    const formatted = `${ceYear}-${String(newMonth).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
+    onChange(formatted);
+  };
+
+  const yearOptions = [];
+  const baseBE = new Date().getFullYear() + 543;
+  for (let y = baseBE - 5; y <= baseBE + 5; y++) {
+    yearOptions.push(y);
+  }
+  if (!yearOptions.includes(curYearBE)) {
+    yearOptions.push(curYearBE);
+    yearOptions.sort((a, b) => a - b);
+  }
+
+  return (
+    <div className={`grid grid-cols-12 gap-1.5 ${className}`}>
+      <select
+        value={curDay}
+        onChange={(e) => updateDate(curYearBE, curMonth, parseInt(e.target.value, 10))}
+        className="col-span-3 p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-bold text-xs text-center cursor-pointer focus:ring-2 focus:ring-amber-600 focus:outline-none"
+        title="วันที่"
+      >
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
+          <option key={d} value={d}>{d}</option>
+        ))}
+      </select>
+      <select
+        value={curMonth}
+        onChange={(e) => updateDate(curYearBE, parseInt(e.target.value, 10), curDay)}
+        className="col-span-5 p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-bold text-xs cursor-pointer focus:ring-2 focus:ring-amber-600 focus:outline-none"
+        title="เดือน"
+      >
+        {THAI_MONTHS.map((mName, idx) => (
+          <option key={idx + 1} value={idx + 1}>{mName}</option>
+        ))}
+      </select>
+      <select
+        value={curYearBE}
+        onChange={(e) => updateDate(parseInt(e.target.value, 10), curMonth, curDay)}
+        className="col-span-4 p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-bold text-xs text-center cursor-pointer focus:ring-2 focus:ring-amber-600 focus:outline-none"
+        title="ปี พ.ศ."
+      >
+        {yearOptions.map((yBE) => (
+          <option key={yBE} value={yBE}>พ.ศ. {yBE}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 const getAuthToken = () => localStorage.getItem('srnc_auth_token') || '';
 
 const authFetch = async (url, options = {}) => {
@@ -371,11 +450,10 @@ export default function SurinCourtWarrantApp() {
 
   const formatThaiDate = (dateString) => {
     if (!dateString) return "....................";
-    const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-    const parts = String(dateString).split('-');
+    const parts = String(dateString).split('T')[0].split('-');
     if (parts.length === 3) {
       const day = parseInt(parts[2], 10);
-      const month = thaiMonths[parseInt(parts[1], 10) - 1];
+      const month = THAI_MONTHS[parseInt(parts[1], 10) - 1];
       let year = parseInt(parts[0], 10);
       if (year < 2500) year += 543;
       return `${day} ${month} ${year}`;
@@ -895,7 +973,6 @@ export default function SurinCourtWarrantApp() {
 
   const getGroupedArchive = () => {
     const archive = {};
-    const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
     currentRecords.forEach(rec => {
       const rawDate = String((rec.sendDate && String(rec.sendDate).trim()) ? rec.sendDate : todayStr).split('T')[0].trim();
       const parts = rawDate.split('-');
@@ -904,7 +981,7 @@ export default function SurinCourtWarrantApp() {
         if (isNaN(rawYear)) return;
         const yearBE = (rawYear < 2500 ? rawYear + 543 : rawYear).toString();
         const monthIdx = parseInt(parts[1], 10) - 1;
-        const monthName = monthNames[monthIdx] || parts[1];
+        const monthName = THAI_MONTHS[monthIdx] || parts[1];
         const day = parseInt(parts[2], 10).toString();
 
         if (!archive[yearBE]) archive[yearBE] = {};
@@ -1150,7 +1227,13 @@ export default function SurinCourtWarrantApp() {
                 <div className="flex items-center gap-2 text-gray-800 font-bold text-lg pb-2 border-b-2 border-yellow-500 mb-4"><User className="w-5 h-5 text-amber-800" /><span>2. รายละเอียดผู้รับหมายและสถานที่นำส่ง</span></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-600 uppercase mb-1">หมายถึงใคร</label><input type="text" value={formData.targetName} onChange={(e) => setFormData({...formData, targetName: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-800" /></div>
-                  <div><label className="block text-xs font-bold text-amber-800 uppercase mb-1">วันที่ส่งหมาย</label><input type="date" value={formData.sendDate} onChange={(e) => setFormData({...formData, sendDate: e.target.value})} className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-medium" /></div>
+                  <div>
+                    <label className="block text-xs font-bold text-amber-800 uppercase mb-1">วันที่ส่งหมาย (พ.ศ.)</label>
+                    <ThaiBuddhistDateInput
+                      value={formData.sendDate}
+                      onChange={(newDate) => setFormData({ ...formData, sendDate: newDate })}
+                    />
+                  </div>
                   <div><label className="block text-xs font-bold text-amber-800 uppercase mb-1 flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-amber-800" /> เวลาที่ส่งหมาย (น.)</label><input type="text" value={formData.sendTime} onChange={(e) => setFormData({...formData, sendTime: e.target.value})} className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-bold font-mono" /></div>
                   <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-600 uppercase mb-1">ที่อยู่ / บ้านเลขที่ / ถนน / หมู่บ้าน</label><textarea rows="2" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-800"></textarea></div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 md:col-span-3">
@@ -1293,10 +1376,15 @@ export default function SurinCourtWarrantApp() {
                   </div>
                 )}
                 <div>
-                  <label className="block font-bold text-gray-700 uppercase mb-1">หรือระบุวันที่ในปฏิทิน:</label>
-                  <div className="flex gap-2">
-                    <input type="date" value={selectedPrintDate === 'ALL' ? '' : selectedPrintDate} onChange={(e) => setSelectedPrintDate(e.target.value)} className="flex-1 p-2 bg-white border border-gray-300 rounded-lg text-xs" />
-                    <button type="button" onClick={() => setSelectedPrintDate('ALL')} className="px-3 py-2 bg-gray-100 rounded-lg text-xs font-bold border cursor-pointer">สัปดาห์นี้</button>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">หรือระบุวันที่แบบไทย (พ.ศ.):</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1">
+                      <ThaiBuddhistDateInput
+                        value={selectedPrintDate === 'ALL' ? todayStr : selectedPrintDate}
+                        onChange={(newDate) => setSelectedPrintDate(newDate)}
+                      />
+                    </div>
+                    <button type="button" onClick={() => setSelectedPrintDate('ALL')} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold border cursor-pointer whitespace-nowrap">สัปดาห์นี้</button>
                   </div>
                 </div>
                 <div className="bg-amber-50/60 p-3 rounded-lg border border-amber-200 flex justify-between items-center text-xs text-gray-600">
