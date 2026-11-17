@@ -654,11 +654,12 @@ export default function SurinCourtWarrantApp() {
     if (formData.photos.length === 1) {
       photosHtml = `<div style="text-align: center; width: 100%;"><img src="${formData.photos[0]}" style="max-width: 95%; max-height: 550px; height: auto; margin: 0 auto; display: block; border: none;"/></div>`;
     } else if (formData.photos.length > 1) {
+      const multiMaxH = formData.photos.length === 2 ? '520px' : '310px';
       let rowsHtml = '';
       for (let i = 0; i < formData.photos.length; i += 2) {
         const img1 = formData.photos[i];
         const img2 = formData.photos[i + 1];
-        rowsHtml += `<tr><td style="width: 50%; padding: 4px; text-align: center;"><img src="${img1}" style="max-width: 100%; max-height: 260px; height: auto; border: none;"/></td><td style="width: 50%; padding: 4px; text-align: center;">${img2 ? `<img src="${img2}" style="max-width: 100%; max-height: 260px; height: auto; border: none;"/>` : ''}</td></tr>`;
+        rowsHtml += `<tr><td style="width: 50%; padding: 2px; text-align: center;"><img src="${img1}" style="max-width: 100%; max-height: ${multiMaxH}; height: auto; border: none;"/></td><td style="width: 50%; padding: 2px; text-align: center;">${img2 ? `<img src="${img2}" style="max-width: 100%; max-height: ${multiMaxH}; height: auto; border: none;"/>` : ''}</td></tr>`;
       }
       photosHtml = `<table style="width: 100%; border-collapse: collapse;">${rowsHtml}</table>`;
     }
@@ -975,9 +976,9 @@ export default function SurinCourtWarrantApp() {
           html, body { height: auto !important; overflow: visible !important; background-color: white !important; margin: 0 !important; padding: 0 !important; }
           * { border: none !important; box-shadow: none !important; outline: none !important; }
           .no-print { display: none !important; }
-          .print-area { display: block !important; width: 100% !important; margin: 0 !important; padding-top: 0.2rem !important; }
-          .page-single { page-break-after: avoid !important; break-after: avoid !important; page-break-inside: avoid !important; break-inside: avoid !important; height: auto !important; max-height: 270mm !important; overflow: hidden !important; }
-          .page-batch { page-break-after: always !important; break-after: page !important; height: auto !important; max-height: 270mm !important; overflow: hidden !important; }
+          .print-area { display: block !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding-top: 0.2rem !important; }
+          .page-single { page-break-after: avoid !important; break-after: avoid !important; page-break-inside: avoid !important; break-inside: avoid !important; height: auto !important; max-height: 278mm !important; overflow: hidden !important; }
+          .page-batch { page-break-after: always !important; break-after: page !important; height: auto !important; max-height: 278mm !important; overflow: hidden !important; }
           img { border: none !important; outline: none !important; border-radius: 0 !important; box-shadow: none !important; }
         }
       `}</style>
@@ -1370,7 +1371,7 @@ export default function SurinCourtWarrantApp() {
         )}
 
         {/* Print Area */}
-        <div className="print-area hidden sarabun-font bg-white text-black max-w-2xl mx-auto">
+        <div className="print-area hidden sarabun-font bg-white text-black max-w-[19cm] mx-auto">
           {printMode === 'single' && (
             <div className="page-single flex flex-col justify-between">
               <div>
@@ -1397,11 +1398,11 @@ export default function SurinCourtWarrantApp() {
                   <div className="text-center font-bold pt-3">ลักษณะบ้าน</div>
                 </div>
               </div>
-              <div className="mt-3 w-full flex justify-center items-center">
+              <div className="mt-2 w-full flex justify-center items-center">
                 {formData.photos && formData.photos.length === 1 ? (
                   <div className="w-full text-center flex justify-center items-center"><img src={formData.photos[0]} alt="รูปสถานที่ส่งหมาย" className="w-auto max-w-[95%] max-h-[11cm] object-contain mx-auto" /></div>
                 ) : formData.photos && formData.photos.length > 1 ? (
-                  <div className="grid grid-cols-2 gap-2 w-full">{formData.photos.slice(0, 4).map((photo, pIdx) => (<div key={pIdx} className="w-full text-center flex items-center justify-center p-0"><img src={photo} alt="" className="w-auto max-w-full max-h-[5.5cm] object-contain mx-auto" /></div>))}</div>
+                  <div className="grid grid-cols-2 gap-1.5 w-full">{formData.photos.slice(0, 4).map((photo, pIdx) => (<div key={pIdx} className="w-full text-center flex items-center justify-center p-0"><img src={photo} alt="" className={`w-full ${formData.photos.length === 2 ? 'max-h-[11.2cm]' : 'max-h-[6.8cm]'} object-contain mx-auto`} /></div>))}</div>
                 ) : (<div className="w-full h-32 text-xs text-gray-400 font-bold flex items-center justify-center">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>)}
               </div>
             </div>
@@ -1437,11 +1438,11 @@ export default function SurinCourtWarrantApp() {
                         <div className="text-center font-bold pt-3">ลักษณะบ้าน</div>
                       </div>
                     </div>
-                    <div className="mt-3 w-full flex justify-center items-center">
+                    <div className="mt-2 w-full flex justify-center items-center">
                       {item.photos && item.photos.length === 1 ? (
                         <div className="w-full text-center flex justify-center items-center"><img src={item.photos[0]} alt="" className="w-auto max-w-[95%] max-h-[11cm] object-contain mx-auto" /></div>
                       ) : item.photos && item.photos.length > 1 ? (
-                        <div className="grid grid-cols-2 gap-2 w-full">{item.photos.slice(0, 4).map((photo, pIdx) => (<div key={pIdx} className="w-full text-center flex items-center justify-center p-0"><img src={photo} alt="" className="w-auto max-w-full max-h-[5.5cm] object-contain mx-auto" /></div>))}</div>
+                        <div className="grid grid-cols-2 gap-1.5 w-full">{item.photos.slice(0, 4).map((photo, pIdx) => (<div key={pIdx} className="w-full text-center flex items-center justify-center p-0"><img src={photo} alt="" className={`w-full ${item.photos.length === 2 ? 'max-h-[11.2cm]' : 'max-h-[6.8cm]'} object-contain mx-auto`} /></div>))}</div>
                       ) : (<div className="w-full h-32 text-xs text-gray-400 font-bold flex items-center justify-center">[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>)}
                     </div>
                   </div>
