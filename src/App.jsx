@@ -645,10 +645,20 @@ export default function SurinCourtWarrantApp() {
 
   const isCourtNotice = (wType) => String(wType || '').trim().includes('ประกาศศาล');
 
+  const isSpecialUnsentResult = (wResult) => {
+    const clean = String(wResult || '').trim();
+    return (
+      clean === 'ส่งไม่ได้บ้านรื้อถอน' ||
+      clean === 'ส่งไม่ได้เพราะบ้านรื้อถอน' ||
+      clean.startsWith('ส่งไม่ได้เพราะ')
+    );
+  };
+
   const handleDownloadWordDoc = () => {
     if (!formData.blackNo && !formData.targetName) return alert("กรุณาเลือกรายการหมายศาลก่อนดาวน์โหลดเอกสาร Word");
 
     const noticeMode = isCourtNotice(formData.warrantType);
+    const specialResultMode = isSpecialUnsentResult(formData.warrantResult);
 
     let photosHtml = '<div>[ ยังไม่ได้เลือกรูปถ่ายสถานที่ ]</div>';
     if (formData.photos.length === 1) {
@@ -663,6 +673,10 @@ export default function SurinCourtWarrantApp() {
       }
       photosHtml = `<table style="width: 100%; border-collapse: collapse;">${rowsHtml}</table>`;
     }
+
+    const actionLineHtml = specialResultMode
+      ? `<div>ข้าพเจ้าได้ ${String(formData.warrantResult || '').trim()}</div>`
+      : `<div>ข้าพเจ้าได้ทำการปิด ${noticeMode ? 'ประกาศศาล' : 'หมาย'} ไว้ ณ ภูมิลำเนาของ <span class="underline-dot">${formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>`;
 
     const htmlContent = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -690,7 +704,7 @@ export default function SurinCourtWarrantApp() {
         <br/>
         <div>วันนี้เวลาประมาณ <span class="underline-dot">${formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span class="underline-dot">${formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span class="underline-dot">${formData.targetName || "...................................."}</span> เมื่อถึงบ้านเลขที่ <span class="underline-dot">${formData.address || "............"}</span> ตำบล <span class="underline-dot">${formData.subdistrict || "............"}</span> อำเภอ <span class="underline-dot">${formData.district || "............"}</span> จังหวัด <span class="underline-dot">${formData.province || "สุรินทร์"}</span>${noticeMode ? '' : ' ซึ่งเป็นบ้านของจำเลย'}</div>
         <br/>
-        <div>ข้าพเจ้าได้ทำการปิด ${noticeMode ? 'ประกาศศาล' : 'หมาย'} ไว้ ณ ภูมิลำเนาของ <span class="underline-dot">${formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+        ${actionLineHtml}
         <br/>
         <div class="center bold">จึงบันทึกไว้เป็นหลักฐาน</div>
         <br/>
@@ -930,6 +944,7 @@ export default function SurinCourtWarrantApp() {
     : allCompletedRecords.filter(r => r.sendDate === selectedPrintDate);
 
   const singleIsCourtNotice = isCourtNotice(formData.warrantType);
+  const singleIsSpecialUnsent = isSpecialUnsentResult(formData.warrantResult);
 
   if (!isLoggedIn) {
     return (
@@ -1387,7 +1402,11 @@ export default function SurinCourtWarrantApp() {
                   <div>เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span></div>
                   <div>วันที่ <span className="dot-underline font-bold min-w-[140px] text-center">{formatThaiDate(formData.sendDate)}</span></div>
                   <div>วันนี้เวลาประมาณ <span className="dot-underline font-bold min-w-[60px] text-center">{formData.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold min-w-[180px] text-center">{formData.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold min-w-[200px] text-center">{formData.targetName || "...................................."}</span> เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold min-w-[90px] text-center">{formData.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[90px] text-center">{formData.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[90px] text-center">{formData.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{formData.province || "สุรินทร์"}</span>{singleIsCourtNotice ? '' : ' ซึ่งเป็นบ้านของจำเลย'}</div>
-                  <div>ข้าพเจ้าได้ทำการปิด {singleIsCourtNotice ? 'ประกาศศาล' : 'หมาย'} ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+                  {singleIsSpecialUnsent ? (
+                    <div>ข้าพเจ้าได้ {String(formData.warrantResult || '').trim()}</div>
+                  ) : (
+                    <div>ข้าพเจ้าได้ทำการปิด {singleIsCourtNotice ? 'ประกาศศาล' : 'หมาย'} ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{formData.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+                  )}
                   <div className="text-center font-bold pt-4 pb-2">จึงบันทึกไว้เป็นหลักฐาน</div>
                   <div className="flex flex-col items-end pt-2 space-y-2">
                     <div className="text-center space-y-1 pr-6">
@@ -1412,6 +1431,7 @@ export default function SurinCourtWarrantApp() {
             <div>
               {recordsToBatchPrint.map((item, idx) => {
                 const itemIsCourtNotice = isCourtNotice(item.warrantType);
+                const itemIsSpecialUnsent = isSpecialUnsentResult(item.warrantResult);
                 return (
                   <div key={item.id || idx} className="page-batch flex flex-col justify-between pt-1">
                     <div>
@@ -1427,7 +1447,11 @@ export default function SurinCourtWarrantApp() {
                         <div>เขียนที่ บ้านเลขที่ <span className="dot-underline font-bold min-w-[100px] text-center">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[100px] text-center">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[100px] text-center">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{item.province || "สุรินทร์"}</span></div>
                         <div>วันที่ <span className="dot-underline font-bold min-w-[140px] text-center">{formatThaiDate(item.sendDate)}</span></div>
                         <div>วันนี้เวลาประมาณ <span className="dot-underline font-bold min-w-[60px] text-center">{item.sendTime || getCurrentTimeStr()}</span> น. ข้าพเจ้าได้นำ <span className="dot-underline font-bold min-w-[180px] text-center">{item.warrantType || "หมายศาล"}</span> มาส่งให้แก่ <span className="dot-underline font-bold min-w-[200px] text-center">{item.targetName || "...................................."}</span> เมื่อถึงบ้านเลขที่ <span className="dot-underline font-bold min-w-[90px] text-center">{item.address || "............"}</span> ตำบล <span className="dot-underline font-bold min-w-[90px] text-center">{item.subdistrict || "............"}</span> อำเภอ <span className="dot-underline font-bold min-w-[90px] text-center">{item.district || "............"}</span> จังหวัด <span className="dot-underline font-bold min-w-[80px] text-center">{item.province || "สุรินทร์"}</span>{itemIsCourtNotice ? '' : ' ซึ่งเป็นบ้านของจำเลย'}</div>
-                        <div>ข้าพเจ้าได้ทำการปิด {itemIsCourtNotice ? 'ประกาศศาล' : 'หมาย'} ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{item.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+                        {itemIsSpecialUnsent ? (
+                          <div>ข้าพเจ้าได้ {String(item.warrantResult || '').trim()}</div>
+                        ) : (
+                          <div>ข้าพเจ้าได้ทำการปิด {itemIsCourtNotice ? 'ประกาศศาล' : 'หมาย'} ไว้ ณ ภูมิลำเนาของ <span className="dot-underline font-bold min-w-[240px] text-center">{item.targetName || "...................................."}</span> ในที่เปิดเผยและมองเห็นได้ชัดเจนตามคำสั่งศาล</div>
+                        )}
                         <div className="text-center font-bold pt-4 pb-2">จึงบันทึกไว้เป็นหลักฐาน</div>
                         <div className="flex flex-col items-end pt-2 space-y-2">
                           <div className="text-center space-y-1 pr-6">
