@@ -1,84 +1,204 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download, KeyRound } from 'lucide-react';
+import { Camera, MapPin, Printer, Plus, FileText, User, Landmark, Lock, LogOut, CheckCircle2, AlertCircle, Users, Trash2, UserPlus, ListOrdered, Edit3, X, Save, FileSpreadsheet, Upload, ArrowRight, CheckSquare, Clock, CheckCircle, FilePlus, History, Search, RotateCcw, PrinterCheck, Calendar, ShieldCheck, FileSearch, Folder, FileDown, Image, Filter, Download, KeyRound, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const API_URL = import.meta.env.MODE === 'production' ? '/api' : 'http://localhost:5000/api';
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 นาที
 
 const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+const THAI_DAYS_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
-// คอมโพเนนต์ตัวเลือกวันที่แบบ วัน / เดือนไทย / ปี พ.ศ. (เก็บค่าเป็น YYYY-MM-DD มาตรฐาน)
-const ThaiBuddhistDateInput = ({ value, onChange, className = "" }) => {
-  const today = new Date();
-  let curYearCE = today.getFullYear();
-  let curMonth = today.getMonth() + 1;
-  let curDay = today.getDate();
+// คอมโพเนนต์ปฏิทินป๊อปอัปรูปแบบเดิม แต่แสดงเดือนและปี พ.ศ. ไทยทั้งหมด
+const ThaiBuddhistDateInput = ({ value, onChange, placeholder = "เลือกวันที่ (พ.ศ.)" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
 
-  if (value && String(value).includes('-')) {
-    const parts = String(value).split('T')[0].split('-');
-    if (parts.length === 3) {
-      let y = parseInt(parts[0], 10);
-      if (y > 2400) y -= 543;
-      if (!isNaN(y)) curYearCE = y;
-      const m = parseInt(parts[1], 10);
-      if (!isNaN(m) && m >= 1 && m <= 12) curMonth = m;
-      const d = parseInt(parts[2], 10);
-      if (!isNaN(d) && d >= 1 && d <= 31) curDay = d;
+  const parseDateValue = (val) => {
+    const today = new Date();
+    if (!val || !String(val).includes('-')) {
+      return { yearCE: today.getFullYear(), month: today.getMonth(), day: today.getDate(), hasValue: false };
     }
-  }
-
-  const curYearBE = curYearCE + 543;
-  const daysInMonth = new Date(curYearCE, curMonth, 0).getDate();
-
-  const updateDate = (newYearBE, newMonth, newDay) => {
-    const ceYear = newYearBE - 543;
-    const maxDay = new Date(ceYear, newMonth, 0).getDate();
-    const safeDay = Math.min(newDay, maxDay);
-    const formatted = `${ceYear}-${String(newMonth).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
-    onChange(formatted);
+    const parts = String(val).split('T')[0].split('-');
+    if (parts.length !== 3) {
+      return { yearCE: today.getFullYear(), month: today.getMonth(), day: today.getDate(), hasValue: false };
+    }
+    let y = parseInt(parts[0], 10);
+    if (y > 2400) y -= 543;
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    if (isNaN(y) || isNaN(m) || isNaN(d)) {
+      return { yearCE: today.getFullYear(), month: today.getMonth(), day: today.getDate(), hasValue: false };
+    }
+    return { yearCE: y, month: m, day: d, hasValue: true };
   };
 
-  const yearOptions = [];
+  const parsed = parseDateValue(value);
+  const [viewYearCE, setViewYearCE] = useState(parsed.yearCE);
+  const [viewMonth, setViewMonth] = useState(parsed.month);
+
+  useEffect(() => {
+    const p = parseDateValue(value);
+    setViewYearCE(p.yearCE);
+    setViewMonth(p.month);
+  }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const handleSelectDay = (dayNum) => {
+    const formatted = `${viewYearCE}-${String(viewMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    onChange(formatted);
+    setIsOpen(false);
+  };
+
+  const handlePrevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYearCE((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYearCE((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const handleToday = () => {
+    const now = new Date();
+    const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    onChange(formatted);
+    setIsOpen(false);
+  };
+
+  const firstDayOfMonth = new Date(viewYearCE, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYearCE, viewMonth + 1, 0).getDate();
+  const todayObj = new Date();
+  const viewYearBE = viewYearCE + 543;
+
+  const displayText = parsed.hasValue
+    ? `${parsed.day} ${THAI_MONTHS[parsed.month]} ${parsed.yearCE + 543}`
+    : placeholder;
+
   const baseBE = new Date().getFullYear() + 543;
-  for (let y = baseBE - 5; y <= baseBE + 5; y++) {
-    yearOptions.push(y);
-  }
-  if (!yearOptions.includes(curYearBE)) {
-    yearOptions.push(curYearBE);
-    yearOptions.sort((a, b) => a - b);
+  const yearOptionsBE = [];
+  for (let y = baseBE - 5; y <= baseBE + 5; y++) yearOptionsBE.push(y);
+  if (!yearOptionsBE.includes(viewYearBE)) {
+    yearOptionsBE.push(viewYearBE);
+    yearOptionsBE.sort((a, b) => a - b);
   }
 
   return (
-    <div className={`grid grid-cols-12 gap-1.5 ${className}`}>
-      <select
-        value={curDay}
-        onChange={(e) => updateDate(curYearBE, curMonth, parseInt(e.target.value, 10))}
-        className="col-span-3 p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-bold text-xs text-center cursor-pointer focus:ring-2 focus:ring-amber-600 focus:outline-none"
-        title="วันที่"
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-full p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-medium text-sm flex items-center justify-between hover:border-amber-500 focus:ring-2 focus:ring-amber-600 focus:outline-none cursor-pointer"
       >
-        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
-          <option key={d} value={d}>{d}</option>
-        ))}
-      </select>
-      <select
-        value={curMonth}
-        onChange={(e) => updateDate(curYearBE, parseInt(e.target.value, 10), curDay)}
-        className="col-span-5 p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-bold text-xs cursor-pointer focus:ring-2 focus:ring-amber-600 focus:outline-none"
-        title="เดือน"
-      >
-        {THAI_MONTHS.map((mName, idx) => (
-          <option key={idx + 1} value={idx + 1}>{mName}</option>
-        ))}
-      </select>
-      <select
-        value={curYearBE}
-        onChange={(e) => updateDate(parseInt(e.target.value, 10), curMonth, curDay)}
-        className="col-span-4 p-2.5 bg-amber-50/50 border border-amber-300 rounded-lg text-gray-800 font-bold text-xs text-center cursor-pointer focus:ring-2 focus:ring-amber-600 focus:outline-none"
-        title="ปี พ.ศ."
-      >
-        {yearOptions.map((yBE) => (
-          <option key={yBE} value={yBE}>พ.ศ. {yBE}</option>
-        ))}
-      </select>
+        <span className={parsed.hasValue ? 'text-gray-800 font-semibold' : 'text-gray-400'}>{displayText}</span>
+        <Calendar className="w-4 h-4 text-amber-800 flex-shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 mt-1.5 w-72 bg-white rounded-xl shadow-2xl border border-amber-300 p-3 z-50 select-none">
+          {/* Header เดือน + ปี พ.ศ. */}
+          <div className="flex items-center justify-between gap-1 pb-2 mb-2 border-b border-gray-200">
+            <div className="flex items-center gap-1">
+              <select
+                value={viewMonth}
+                onChange={(e) => setViewMonth(parseInt(e.target.value, 10))}
+                className="text-xs font-bold text-gray-800 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-1 cursor-pointer focus:outline-none"
+              >
+                {THAI_MONTHS.map((m, idx) => (
+                  <option key={idx} value={idx}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={viewYearBE}
+                onChange={(e) => setViewYearCE(parseInt(e.target.value, 10) - 543)}
+                className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-1 cursor-pointer focus:outline-none"
+              >
+                {yearOptionsBE.map((yBE) => (
+                  <option key={yBE} value={yBE}>{yBE}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-gray-100 rounded text-gray-600 cursor-pointer" title="เดือนก่อนหน้า">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-gray-100 rounded text-gray-600 cursor-pointer" title="เดือนถัดไป">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* วันในสัปดาห์ */}
+          <div className="grid grid-cols-7 text-center text-[11px] font-bold text-gray-500 mb-1">
+            {THAI_DAYS_SHORT.map((dName, i) => (
+              <div key={i} className={i === 0 ? 'text-red-500' : ''}>{dName}</div>
+            ))}
+          </div>
+
+          {/* ตารางวันที่ */}
+          <div className="grid grid-cols-7 gap-0.5 text-center text-xs">
+            {Array.from({ length: firstDayOfMonth }).map((_, idx) => (
+              <div key={`empty-${idx}`} className="p-1.5" />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((dayNum) => {
+              const isSelected = parsed.hasValue && parsed.yearCE === viewYearCE && parsed.month === viewMonth && parsed.day === dayNum;
+              const isToday = todayObj.getFullYear() === viewYearCE && todayObj.getMonth() === viewMonth && todayObj.getDate() === dayNum;
+              return (
+                <button
+                  key={dayNum}
+                  type="button"
+                  onClick={() => handleSelectDay(dayNum)}
+                  className={`p-1.5 rounded-lg font-medium transition cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-600 text-white font-bold shadow-xs'
+                      : isToday
+                        ? 'border border-amber-500 text-amber-900 font-bold bg-amber-50'
+                        : 'hover:bg-amber-100 text-gray-700'
+                  }`}
+                >
+                  {dayNum}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ปุ่มด้านล่าง */}
+          <div className="flex justify-between items-center pt-2 mt-2 border-t border-gray-200 text-xs">
+            <button
+              type="button"
+              onClick={() => { onChange(''); setIsOpen(false); }}
+              className="text-gray-500 hover:text-red-600 font-semibold px-2 py-1 rounded cursor-pointer"
+            >
+              ล้างค่า
+            </button>
+            <button
+              type="button"
+              onClick={handleToday}
+              className="text-blue-600 hover:text-blue-800 font-bold px-2 py-1 rounded cursor-pointer"
+            >
+              วันนี้
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1228,7 +1348,7 @@ export default function SurinCourtWarrantApp() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-600 uppercase mb-1">หมายถึงใคร</label><input type="text" value={formData.targetName} onChange={(e) => setFormData({...formData, targetName: e.target.value})} className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-800" /></div>
                   <div>
-                    <label className="block text-xs font-bold text-amber-800 uppercase mb-1">วันที่ส่งหมาย (พ.ศ.)</label>
+                    <label className="block text-xs font-bold text-amber-800 uppercase mb-1">วันที่ส่งหมาย</label>
                     <ThaiBuddhistDateInput
                       value={formData.sendDate}
                       onChange={(newDate) => setFormData({ ...formData, sendDate: newDate })}
@@ -1376,15 +1496,16 @@ export default function SurinCourtWarrantApp() {
                   </div>
                 )}
                 <div>
-                  <label className="block font-bold text-gray-700 uppercase mb-1">หรือระบุวันที่แบบไทย (พ.ศ.):</label>
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="block font-bold text-gray-700 uppercase mb-1">หรือระบุวันที่ในปฏิทิน (พ.ศ.):</label>
+                  <div className="flex gap-2 items-center">
                     <div className="flex-1">
                       <ThaiBuddhistDateInput
-                        value={selectedPrintDate === 'ALL' ? todayStr : selectedPrintDate}
-                        onChange={(newDate) => setSelectedPrintDate(newDate)}
+                        value={selectedPrintDate === 'ALL' ? '' : selectedPrintDate}
+                        onChange={(newDate) => setSelectedPrintDate(newDate || 'ALL')}
+                        placeholder="เลือกวันที่ในปฏิทิน"
                       />
                     </div>
-                    <button type="button" onClick={() => setSelectedPrintDate('ALL')} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold border cursor-pointer whitespace-nowrap">สัปดาห์นี้</button>
+                    <button type="button" onClick={() => setSelectedPrintDate('ALL')} className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold border cursor-pointer whitespace-nowrap">สัปดาห์นี้</button>
                   </div>
                 </div>
                 <div className="bg-amber-50/60 p-3 rounded-lg border border-amber-200 flex justify-between items-center text-xs text-gray-600">
